@@ -360,75 +360,72 @@ export default function Photobooth() {
 
       {stage === "camera" ? (
         <>
-          {/* preview */}
+          {/* preview — single stable video so the stream is never lost on frame/camera switch */}
           <div className="flex-1 min-h-[300px] relative bg-[#141110] overflow-hidden">
-            {cameraOk && (
-              <>
-                {frame === "film" ? (
-                  <div className="film absolute inset-0 flex flex-col justify-center">
-                    <video
-                      ref={videoRef}
-                      autoPlay
-                      muted
-                      playsInline
-                      aria-label="Camera preview"
-                      className="w-full aspect-[3/2] object-cover"
-                      style={{
-                        filter: previewCss,
-                        transform: mirror ? "scaleX(-1)" : undefined,
-                      }}
-                    />
-                  </div>
-                ) : (
-                  <div
-                    className={`absolute inset-0 flex flex-col justify-center ${
-                      frame === "polaroid" ? "bg-[#FFFEFA] p-3" : frame === "square" ? "bg-[#FFFEFA] p-1.5" : ""
-                    }`}
-                  >
+            {/* stable camera element — always mounted so srcObject is never lost */}
+            <div
+              className={`absolute inset-0 flex flex-col justify-center ${
+                cameraOk && frame === "film"
+                  ? "film"
+                  : cameraOk && frame === "polaroid"
+                    ? "bg-[#FFFEFA] p-3 pb-12"
+                    : cameraOk && frame === "square"
+                      ? "bg-[#FFFEFA] p-1.5"
+                      : "bg-[#141110]"
+              }`}
+              aria-hidden={!cameraOk}
+            >
+              <div
+                className={`relative w-full overflow-hidden bg-black ${
+                  !cameraOk
+                    ? "aspect-[4/3]"
+                    : frame === "polaroid" || frame === "square"
+                      ? "aspect-square"
+                      : frame === "film"
+                        ? "aspect-[3/2]"
+                        : "aspect-[4/3]"
+                }`}
+              >
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  aria-label="Camera preview"
+                  className="absolute inset-0 w-full h-full object-cover block"
+                  style={{
+                    filter: previewCss,
+                    transform: mirror ? "scaleX(-1)" : undefined,
+                    opacity: cameraOk ? 1 : 0,
+                    visibility: cameraOk ? "visible" : "hidden",
+                  }}
+                />
+                {/* approximation overlays: vignette + fade wash + fine grain — only when ready */}
+                {cameraOk && (
+                  <>
                     <div
-                      className={`relative w-full overflow-hidden bg-black ${
-                        frame === "polaroid" || frame === "square" ? "aspect-square" : "aspect-[4/3]"
-                      }`}
-                    >
-                      <video
-                        ref={videoRef}
-                        autoPlay
-                        muted
-                        playsInline
-                        aria-label="Camera preview"
-                        className="absolute inset-0 w-full h-full object-cover"
-                        style={{
-                          filter: previewCss,
-                          transform: mirror ? "scaleX(-1)" : undefined,
-                        }}
-                      />
-                      {/* approximation overlays: vignette + fade wash + fine grain */}
-                      <div
-                        aria-hidden
-                        className="absolute inset-0 pointer-events-none"
-                        style={{ background: "radial-gradient(ellipse at center, transparent 58%, rgba(30,20,14,0.55) 100%)", opacity: vigOpacity }}
-                      />
-                      {fadeOpacity > 0.005 && (
-                        <div aria-hidden className="absolute inset-0 bg-[#FFFDF7] pointer-events-none" style={{ opacity: fadeOpacity }} />
-                      )}
-                      <div
-                        aria-hidden
-                        className="absolute inset-0 pointer-events-none"
-                        style={{ backgroundImage: GRAIN_BG, backgroundSize: "140px", opacity: grainOpacity }}
-                      />
-                    </div>
-                    {frame === "polaroid" && (
-                      <div aria-hidden className="flex items-center justify-between px-1 pt-2">
-                        <span className="font-display font-semibold text-[15px] text-[#2B2622]">twofold</span>
-                        <span className="font-mono text-[11px] tracking-[0.14em] text-[#7D2E3B]">{stamp}</span>
-                      </div>
+                      aria-hidden
+                      className="absolute inset-0 pointer-events-none"
+                      style={{ background: "radial-gradient(ellipse at center, transparent 58%, rgba(30,20,14,0.55) 100%)", opacity: vigOpacity }}
+                    />
+                    {fadeOpacity > 0.005 && (
+                      <div aria-hidden className="absolute inset-0 bg-[#FFFDF7] pointer-events-none" style={{ opacity: fadeOpacity }} />
                     )}
-                  </div>
+                    <div
+                      aria-hidden
+                      className="absolute inset-0 pointer-events-none"
+                      style={{ backgroundImage: GRAIN_BG, backgroundSize: "140px", opacity: grainOpacity }}
+                    />
+                  </>
                 )}
-              </>
-            )}
-
-            {!cameraOk && <video ref={videoRef} autoPlay muted playsInline className="hidden" aria-hidden />}
+              </div>
+              {cameraOk && frame === "polaroid" && (
+                <div aria-hidden className="flex items-center justify-between px-1 pt-2">
+                  <span className="font-display font-semibold text-[15px] text-[#2B2622]">twofold</span>
+                  <span className="font-mono text-[11px] tracking-[0.14em] text-[#7D2E3B]">{stamp}</span>
+                </div>
+              )}
+            </div>
 
             {/* countdown */}
             {countdown !== null && countdown > 0 && (

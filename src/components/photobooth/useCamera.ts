@@ -71,28 +71,66 @@ export function useCamera(facing: Facing) {
             stream.getTracks().forEach((t) => t.stop());
             return;
           }
+          // Verify a live video track — otherwise we'd show a black preview.
+          const vTrack = stream.getVideoTracks()[0];
+          if (!vTrack || vTrack.readyState !== "live") {
+            stream.getTracks().forEach((t) => t.stop());
+            continue;
+          }
+          if (!vTrack.enabled) {
+            try {
+              vTrack.enabled = true;
+            } catch {
+              /* ignore */
+            }
+          }
           streamRef.current = stream;
-          const el = videoRef.current;
+          // Wait for the <video> to be mounted — the stable preview keeps it
+          // mounted, but on first mount there is a one-frame gap.
+          let el = videoRef.current;
+          if (!el) {
+            await new Promise<void>((res) => requestAnimationFrame(() => res()));
+            el = videoRef.current;
+          }
           if (el) {
-            el.srcObject = stream;
+            // Ensure any previous srcObject is cleared before assigning.
+            if (el.srcObject !== stream) el.srcObject = stream;
             // iOS Safari needs muted+playsInline+autoPlay and an explicit play().
-            // Wait for enough data before declaring ready so canvas capture has
-            // real videoWidth/videoHeight, not just CSS dimensions.
             try {
               await el.play();
             } catch {
               /* autoplay with muted+playsInline can still need a gesture on some iOS */
             }
+            // Wait for enough data so videoWidth/Height >0 — otherwise
+            // the preview is black and canvas capture would be 0×0.
             await new Promise<void>((res) => {
-              if (el.readyState >= 2 && el.videoWidth > 0) return res();
-              const onLoaded = () => {
-                el.removeEventListener("loadedmetadata", onLoaded);
+              if (el!.readyState >= 2 && el!.videoWidth > 0 && el!.videoHeight > 0) return res();
+              let done = false;
+              const finish = () => {
+                if (done) return;
+                done = true;
+                el!.removeEventListener("loadedmetadata", finish);
+                el!.removeEventListener("canplay", finish);
                 res();
               };
-              el.addEventListener("loadedmetadata", onLoaded, { once: true });
-              // Safety: don't hang forever.
-              setTimeout(res, 1200);
+              el!.addEventListener("loadedmetadata", finish, { once: true });
+              el!.addEventListener("canplay", finish, { once: true } as AddEventListenerOptions);
+              setTimeout(finish, 1400);
             });
+            // Final verification — if dimensions are still 0, the video is not
+            // actually playing (e.g. track muted by OS). Treat as error.
+            if (el.videoWidth === 0 || el.videoHeight === 0) {
+              stream.getTracks().forEach((t) => t.stop());
+              streamRef.current = null;
+              el.srcObject = null;
+              continue;
+            }
+          } else {
+            // No video element to show the stream — keep it live but don't
+            // mark ready; the next render will attach it.
+            stream.getTracks().forEach((t) => t.stop());
+            streamRef.current = null;
+            continue;
           }
           if (gen !== genRef.current) {
             stream.getTracks().forEach((t) => t.stop());
