@@ -10,7 +10,7 @@ import { useApp } from "../../store/AppContext";
 
 export function DesktopSidebar() {
   return (
-    <aside className="hidden lg:flex w-[248px] shrink-0 flex-col border-r border-[#E5DAC6] bg-[#FFFDF7]/60 sticky top-0 h-dvh overflow-y-auto overflow-x-hidden no-scrollbar px-5 py-6">
+    <aside className="hidden lg:flex w-[248px] shrink-0 flex-col border-r border-[#E5DAC6] bg-[#FFFDF7]/60 sticky top-0 h-dvh overflow-y-auto no-scrollbar px-5 py-6 pb-8">
       <Logo />
       <nav className="mt-8 flex flex-col gap-1 text-[15px] font-medium">
         <SideLink to="/home" icon={Home} label="Home" />
@@ -23,8 +23,8 @@ export function DesktopSidebar() {
         <SideLink to="/wishlist" icon={Sparkles} label="Wishlist" />
         <SideLink to="/profile" icon={Camera} label="Couple profile" />
       </nav>
-      <div className="mt-auto pt-6 pb-2">
-        <div className="paper-card p-4 rotate-[-1deg]">
+      <div className="mt-auto pt-8">
+        <div className="paper-card p-4 rotate-[-1deg] mx-0.5 mb-1">
           <p className="font-hand text-[20px] leading-tight text-[#4A423B]">“We made our own little place on the internet.”</p>
           <p className="mt-2 text-[12px] uppercase tracking-[0.14em] text-[#8A7F72]">— twofold</p>
         </div>

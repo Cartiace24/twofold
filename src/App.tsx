@@ -69,9 +69,9 @@ function AuthedShell() {
   }, [loc.pathname]);
 
   return (
-    <div className="paper-grain min-h-dvh lg:flex lg:items-stretch overflow-x-hidden">
+    <div className="paper-grain min-h-dvh lg:flex lg:items-stretch">
       <DesktopSidebar />
-      <div className="flex-1 min-w-0 lg:max-w-[1060px] lg:mx-auto w-full overflow-x-hidden">
+      <div className="flex-1 min-w-0 lg:max-w-[1060px] lg:mx-auto w-full overflow-x-hidden overflow-y-visible">
         {!hideChrome && loc.pathname !== "/home" && <TopBar title={title} subtitle={sub} />}
         {loc.pathname === "/home" && (
           <div className="lg:hidden sticky top-0 z-40 bg-[#FAF6EF]/92 backdrop-blur border-b border-[#E5DAC6] px-4 pt-[calc(0.6rem+env(safe-area-inset-top))] pb-2.5 text-center">

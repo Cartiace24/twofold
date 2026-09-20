@@ -153,7 +153,21 @@ export function PlaceForm({ onDone, defaultName, defaultLat, defaultLng }: { onD
   const [memoryId, setMemoryId] = useState("");
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [picking, setPicking] = useState(false);
   const allPhotos = memories.flatMap((m) => m.photos.map((p) => ({ url: p.url, memoryId: m.id, title: m.title })));
+
+  const pickUpload = async (files: FileList | null) => {
+    if (!files?.length) return;
+    setPicking(true);
+    try {
+      const urls = await filesToDataUrls(files);
+      if (urls[0]) setPhotoUrl(urls[0]);
+    } catch {
+      // keep previous photo
+    } finally {
+      setPicking(false);
+    }
+  };
   return (
     <div className="flex flex-col gap-4">
       <Field label="Place name"><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Our bench, that café…" /></Field>
@@ -175,9 +189,15 @@ export function PlaceForm({ onDone, defaultName, defaultLat, defaultLng }: { onD
           {memories.map((m) => <option key={m.id} value={m.id}>{m.title}</option>)}
         </select>
       </Field>
-      <Field label="Photo" hint={allPhotos.length ? "tap a memory photo to attach it" : "add memories with photos first"}>
-        {allPhotos.length ? (
+      <Field label="Photo" hint={allPhotos.length ? "tap a memory photo or upload — your pick" : "upload a photo, or add a memory first"}>
+        <label className="touch flex items-center justify-center gap-2 border border-dashed border-[#B6AA99] bg-[#FFFDF7] rounded-[4px] px-4 py-3 text-[14px] font-semibold text-[#4A423B] cursor-pointer active:scale-[0.98]">
+          <input type="file" accept="image/*" className="hidden" onChange={(e) => pickUpload(e.target.files)} />
+          {picking ? <Loader2 className="animate-spin" size={18} /> : <ImagePlus size={18} />}
+          {picking ? "Reading…" : photoUrl && !allPhotos.some((p) => p.url === photoUrl) ? "Change uploaded photo" : "Upload a photo"}
+        </label>
+        {allPhotos.length > 0 && (
           <>
+            <p className="mt-2 text-[12px] font-bold uppercase tracking-[0.12em] text-[#8A7F72]">or pick from memories</p>
             <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-1 px-1 py-1 snap-x">
               {allPhotos.slice(0, 12).map((p, i) => (
                 <button
@@ -195,16 +215,17 @@ export function PlaceForm({ onDone, defaultName, defaultLat, defaultLng }: { onD
                 </button>
               ))}
             </div>
-            {photoUrl && (
-              <div className="mt-2 flex items-center gap-2">
-                <img src={photoUrl} alt="Selected" className="w-12 h-12 object-cover border border-[#E5DAC6] rounded-[3px]" />
-                <span className="text-[13px] text-[#6B7F5E] font-semibold">selected ♡</span>
-                <button type="button" onClick={() => setPhotoUrl(null)} className="text-[12px] underline text-[#8A7F72] ml-auto">clear</button>
-              </div>
-            )}
           </>
-        ) : (
-          <p className="text-[13px] text-[#B6AA99]">No memory photos yet — save a memory first.</p>
+        )}
+        {photoUrl && (
+          <div className="mt-2 flex items-center gap-2">
+            <img src={photoUrl} alt="Selected" className="w-12 h-12 object-cover border border-[#E5DAC6] rounded-[3px]" />
+            <span className="text-[13px] text-[#6B7F5E] font-semibold">selected ♡</span>
+            <button type="button" onClick={() => setPhotoUrl(null)} className="text-[12px] underline text-[#8A7F72] ml-auto">clear</button>
+          </div>
+        )}
+        {!allPhotos.length && !photoUrl && (
+          <p className="mt-2 text-[13px] text-[#8A7F72]">Tip: you can still upload directly here — no memory needed.</p>
         )}
       </Field>
       <Button disabled={!name.trim() || busy} onClick={async () => {
