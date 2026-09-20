@@ -608,12 +608,10 @@ export default function Photobooth() {
                 role="tablist"
                 aria-label="Film look"
                 onPointerDown={(e) => {
-                  // touch uses native scroll — only intercept mouse/pen for drag
                   if (e.pointerType === "touch") return;
                   const el = filmStripRef.current;
                   if (!el) return;
                   filmDrag.current = { x: e.clientX, left: el.scrollLeft, moved: false, active: true };
-                  el.setPointerCapture(e.pointerId);
                 }}
                 onPointerMove={(e) => {
                   if (e.pointerType === "touch") return;
@@ -624,22 +622,18 @@ export default function Photobooth() {
                   if (Math.abs(dx) > 8) d.moved = true;
                   el.scrollLeft = d.left - dx;
                 }}
-                onPointerUp={(e) => {
-                  if (e.pointerType === "touch") return;
-                  const el = filmStripRef.current;
+                onPointerUp={() => {
                   const d = filmDrag.current;
-                  el?.releasePointerCapture(e.pointerId);
-                  if (d) {
-                    d.active = false;
-                    if (d.moved) window.setTimeout(() => (d.moved = false), 150);
-                  }
-                }}
-                onPointerCancel={(e) => {
-                  if (e.pointerType === "touch") return;
-                  const el = filmStripRef.current;
-                  const d = filmDrag.current;
-                  el?.releasePointerCapture(e.pointerId);
+                  if (d?.moved) window.setTimeout(() => (d.moved = false), 150);
                   if (d) d.active = false;
+                }}
+                onPointerCancel={() => {
+                  const d = filmDrag.current;
+                  if (d) d.active = false;
+                }}
+                onPointerLeave={() => {
+                  const d = filmDrag.current;
+                  if (d?.active) d.active = false;
                 }}
               >
                 {BOOTH_PRESETS.map((p) => {

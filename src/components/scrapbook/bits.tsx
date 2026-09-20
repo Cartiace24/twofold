@@ -155,28 +155,25 @@ export function FilterTabs<T extends string>({
   const drag = React.useRef({ active: false, x: 0, left: 0, moved: false });
 
   const onPointerDown = (e: React.PointerEvent) => {
+    if (e.pointerType === "touch") return;
     const el = ref.current;
     if (!el) return;
     drag.current = { active: true, x: e.clientX, left: el.scrollLeft, moved: false };
-    el.setPointerCapture(e.pointerId);
   };
   const onPointerMove = (e: React.PointerEvent) => {
+    if (e.pointerType === "touch") return;
     const d = drag.current;
     const el = ref.current;
     if (!d.active || !el) return;
     const dx = e.clientX - d.x;
-    if (Math.abs(dx) > 3) d.moved = true;
+    if (Math.abs(dx) > 8) d.moved = true;
     el.scrollLeft = d.left - dx;
   };
-  const stopDrag = (e: React.PointerEvent) => {
-    const el = ref.current;
-    el?.releasePointerCapture(e.pointerId);
-    // Avoid the tap→select when the gesture was actually a drag.
+  const stopDrag = () => {
     if (drag.current.moved) {
-      // Let the scroll settle before re-enabling clicks.
       window.setTimeout(() => {
         drag.current.moved = false;
-      }, 0);
+      }, 150);
     }
     drag.current.active = false;
   };
@@ -190,7 +187,8 @@ export function FilterTabs<T extends string>({
       onPointerMove={onPointerMove}
       onPointerUp={stopDrag}
       onPointerCancel={stopDrag}
-      className="flex gap-1 overflow-x-auto no-scrollbar -mx-4 px-4 pb-1 cursor-grab active:cursor-grabbing select-none touch-pan-x"
+      onPointerLeave={stopDrag}
+      className="flex gap-1 overflow-x-auto no-scrollbar -mx-4 px-4 pb-1 cursor-grab active:cursor-grabbing select-none touch-pan-x overscroll-x-contain"
     >
       {options.map((o) => {
         const active = o.id === value;
@@ -203,7 +201,6 @@ export function FilterTabs<T extends string>({
               if (drag.current.moved) return;
               onChange(o.id);
             }}
-            onPointerUp={(e) => e.stopPropagation()}
             className={`touch shrink-0 px-3 font-hand text-[22px] leading-none transition active:scale-[0.97] ${
               active ? "text-[#7D2E3B] sketch-underline" : "text-[#8A7F72]"
             }`}
