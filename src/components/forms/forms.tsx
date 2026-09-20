@@ -151,7 +151,9 @@ export function PlaceForm({ onDone, defaultName, defaultLat, defaultLng }: { onD
   const [lat, setLat] = useState(defaultLat?.toFixed(4) ?? "40.7128");
   const [lng, setLng] = useState(defaultLng?.toFixed(4) ?? "-74.0060");
   const [memoryId, setMemoryId] = useState("");
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const allPhotos = memories.flatMap((m) => m.photos.map((p) => ({ url: p.url, memoryId: m.id, title: m.title })));
   return (
     <div className="flex flex-col gap-4">
       <Field label="Place name"><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Our bench, that café…" /></Field>
@@ -161,14 +163,53 @@ export function PlaceForm({ onDone, defaultName, defaultLat, defaultLng }: { onD
         <Field label="Lng"><Input inputMode="decimal" value={lng} onChange={(e) => setLng(e.target.value)} /></Field>
       </div>
       <Field label="Link a memory" hint="optional">
-        <select value={memoryId} onChange={(e) => setMemoryId(e.target.value)} className="touch w-full bg-[#FFFDF7] border border-[#E5DAC6] rounded-[3px] px-3 text-[15px]">
+        <select value={memoryId} onChange={(e) => {
+          const v = e.target.value;
+          setMemoryId(v);
+          if (v) {
+            const m = memories.find((x) => x.id === v);
+            if (m?.photos[0]?.url && !photoUrl) setPhotoUrl(m.photos[0].url);
+          }
+        }} className="touch w-full bg-[#FFFDF7] border border-[#E5DAC6] rounded-[3px] px-3 text-[15px]">
           <option value="">— none —</option>
           {memories.map((m) => <option key={m.id} value={m.id}>{m.title}</option>)}
         </select>
       </Field>
+      <Field label="Photo" hint={allPhotos.length ? "tap a memory photo to attach it" : "add memories with photos first"}>
+        {allPhotos.length ? (
+          <>
+            <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-1 px-1 py-1 snap-x">
+              {allPhotos.slice(0, 12).map((p, i) => (
+                <button
+                  key={`${p.memoryId}-${i}`}
+                  type="button"
+                  onClick={() => {
+                    setPhotoUrl(p.url);
+                    setMemoryId(p.memoryId);
+                  }}
+                  className={`shrink-0 snap-start relative rounded-[3px] overflow-hidden border-2 ${photoUrl === p.url ? "border-[#7D2E3B]" : "border-[#E5DAC6]"}`}
+                  aria-label={`Use photo from ${p.title}`}
+                >
+                  <img src={p.url} alt={p.title} className="w-[72px] h-[72px] object-cover" loading="lazy" />
+                  {photoUrl === p.url && <span className="absolute inset-0 bg-[#7D2E3B]/15" aria-hidden />}
+                </button>
+              ))}
+            </div>
+            {photoUrl && (
+              <div className="mt-2 flex items-center gap-2">
+                <img src={photoUrl} alt="Selected" className="w-12 h-12 object-cover border border-[#E5DAC6] rounded-[3px]" />
+                <span className="text-[13px] text-[#6B7F5E] font-semibold">selected ♡</span>
+                <button type="button" onClick={() => setPhotoUrl(null)} className="text-[12px] underline text-[#8A7F72] ml-auto">clear</button>
+              </div>
+            )}
+          </>
+        ) : (
+          <p className="text-[13px] text-[#B6AA99]">No memory photos yet — save a memory first.</p>
+        )}
+      </Field>
       <Button disabled={!name.trim() || busy} onClick={async () => {
         setBusy(true);
-        await addPlace({ name: name.trim(), description: desc.trim(), lat: Number(lat) || 0, lng: Number(lng) || 0, date: todayISO(), memory_id: memoryId || null });
+        await addPlace({ name: name.trim(), description: desc.trim(), lat: Number(lat) || 0, lng: Number(lng) || 0, date: todayISO(), photo_url: photoUrl, memory_id: memoryId || null });
         setBusy(false);
         onDone();
       }}>Save place</Button>
