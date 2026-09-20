@@ -604,33 +604,38 @@ export default function Photobooth() {
               </p>
               <div
                 ref={filmStripRef}
-                className="flex gap-2.5 overflow-x-auto no-scrollbar -mx-4 px-4 py-1 cursor-grab active:cursor-grabbing select-none touch-pan-x"
+                className="flex gap-2.5 overflow-x-auto no-scrollbar -mx-4 px-4 py-1 cursor-grab active:cursor-grabbing select-none touch-pan-x overscroll-x-contain"
                 role="tablist"
                 aria-label="Film look"
                 onPointerDown={(e) => {
+                  // touch uses native scroll — only intercept mouse/pen for drag
+                  if (e.pointerType === "touch") return;
                   const el = filmStripRef.current;
                   if (!el) return;
                   filmDrag.current = { x: e.clientX, left: el.scrollLeft, moved: false, active: true };
                   el.setPointerCapture(e.pointerId);
                 }}
                 onPointerMove={(e) => {
+                  if (e.pointerType === "touch") return;
                   const el = filmStripRef.current;
                   const d = filmDrag.current;
                   if (!d?.active || !el) return;
                   const dx = e.clientX - d.x;
-                  if (Math.abs(dx) > 3) d.moved = true;
+                  if (Math.abs(dx) > 8) d.moved = true;
                   el.scrollLeft = d.left - dx;
                 }}
                 onPointerUp={(e) => {
+                  if (e.pointerType === "touch") return;
                   const el = filmStripRef.current;
                   const d = filmDrag.current;
                   el?.releasePointerCapture(e.pointerId);
                   if (d) {
                     d.active = false;
-                    if (d.moved) window.setTimeout(() => (d.moved = false), 0);
+                    if (d.moved) window.setTimeout(() => (d.moved = false), 150);
                   }
                 }}
                 onPointerCancel={(e) => {
+                  if (e.pointerType === "touch") return;
                   const el = filmStripRef.current;
                   const d = filmDrag.current;
                   el?.releasePointerCapture(e.pointerId);
