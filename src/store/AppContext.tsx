@@ -662,7 +662,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
           const code = makeInviteCode();
           const { data, error } = await sb.from("couples").insert({ name, together_since: since, invite_code: code, created_by: user.id }).select().single();
           if (error) throw new Error(error.message);
-          await sb.from("couple_members").insert({ couple_id: (data as { id: string }).id, user_id: user.id, role: "owner" });
+          const { error: memberError } = await sb.from("couple_members").insert({ couple_id: (data as { id: string }).id, user_id: user.id, role: "owner" });
+          if (memberError) {
+            // Roll back the couple so we don't orphan a row no one can read
+            await sb.from("couples").delete().eq("id", (data as { id: string }).id);
+            throw new Error(memberError.message);
+          }
           await fetchCoupleData(sb, user.id);
           return;
         }

@@ -67,23 +67,26 @@ export function Signup() {
     );
   }
 
+  const handleSignup = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!email.includes("@")) return setErr("That email doesn't look right.");
+    if (pw.length < 6) return setErr("Password needs at least 6 characters.");
+    setBusy(true); setErr("");
+    const r = await signUp(email.trim(), pw, name.trim());
+    setBusy(false);
+    if (r.error) setErr(r.error);
+    else if (r.needsConfirmation) setConfirmSent(true);
+    else nav("/welcome");
+  };
+
   return (
     <Shell title="Create your Twofold" hand="two lives, one story — start yours ♡">
-      <div className="flex flex-col gap-4">
+      <form onSubmit={handleSignup} className="flex flex-col gap-4">
         <Field label="Your name"><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Sam" autoComplete="given-name" /></Field>
         <Field label="Email"><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" autoComplete="email" /></Field>
         <Field label="Password" hint="8+ characters is plenty"><Input type="password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="••••••••" autoComplete="new-password" /></Field>
-        {err && <p className="text-[14px] font-semibold text-[#7D2E3B]">{err}</p>}
-        <Button disabled={busy} onClick={async () => {
-          if (!email.includes("@")) return setErr("That email doesn't look right.");
-          if (pw.length < 6) return setErr("Password needs at least 6 characters.");
-          setBusy(true); setErr("");
-          const r = await signUp(email.trim(), pw, name.trim());
-          setBusy(false);
-          if (r.error) setErr(r.error);
-          else if (r.needsConfirmation) setConfirmSent(true);
-          else nav("/welcome");
-        }}>{busy ? "Making a little room…" : "Create our space"}</Button>
+        {err && <p className="text-[14px] font-semibold text-[#7D2E3B]" role="alert">{err}</p>}
+        <Button type="submit" disabled={busy}>{busy ? "Making a little room…" : "Create our space"}</Button>
         <div className="flex items-center gap-2 text-[12px] font-bold uppercase tracking-[0.14em] text-[#B6AA99]">
           <span className="h-px flex-1 bg-[#E5DAC6]" /> or <span className="h-px flex-1 bg-[#E5DAC6]" />
         </div>
@@ -99,7 +102,7 @@ export function Signup() {
           }}
         />
         <p className="text-[14px] text-[#8A7F72] text-center">Already have one? <Link to="/login" className="font-bold text-[#7D2E3B] underline">Log in</Link></p>
-      </div>
+      </form>
     </Shell>
   );
 }
@@ -112,19 +115,21 @@ export function Login() {
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [gBusy, setGBusy] = useState(false);
+  const handleLogin = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    setBusy(true); setErr("");
+    const r = await signIn(email.trim(), pw);
+    setBusy(false);
+    if (r.error) setErr(r.error);
+    else nav("/home");
+  };
   return (
     <Shell title="Welcome back" hand="your diary missed you">
-      <div className="flex flex-col gap-4">
+      <form onSubmit={handleLogin} className="flex flex-col gap-4">
         <Field label="Email"><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" autoComplete="email" /></Field>
-        <Field label="Password"><Input type="password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="••••••••" autoComplete="current-password" /></Field>
-        {err && <p className="text-[14px] font-semibold text-[#7D2E3B]">{err}</p>}
-        <Button disabled={busy} onClick={async () => {
-          setBusy(true); setErr("");
-          const r = await signIn(email.trim(), pw);
-          setBusy(false);
-          if (r.error) setErr(r.error);
-          else nav("/home");
-        }}>{busy ? "Opening…" : "Open our diary"}</Button>
+        <Field label="Password"><Input type="password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="••••••••" autoComplete="current-password" onKeyDown={(e) => { if (e.key === "Enter") handleLogin(); }} /></Field>
+        {err && <p className="text-[14px] font-semibold text-[#7D2E3B]" role="alert">{err}</p>}
+        <Button type="submit" disabled={busy}>{busy ? "Opening…" : "Open our diary"}</Button>
         <div className="flex items-center gap-2 text-[12px] font-bold uppercase tracking-[0.14em] text-[#B6AA99]">
           <span className="h-px flex-1 bg-[#E5DAC6]" /> or <span className="h-px flex-1 bg-[#E5DAC6]" />
         </div>
@@ -145,7 +150,7 @@ export function Login() {
         {!isSupabaseConfigured && (
           <p className="text-[12.5px] text-[#B6AA99] text-center leading-relaxed">Demo mode: any email works —<br />we'll open the sample story so you can look around.</p>
         )}
-      </div>
+      </form>
     </Shell>
   );
 }
