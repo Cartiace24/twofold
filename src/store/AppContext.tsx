@@ -338,26 +338,47 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }
 
   async function fetchCoupleData(sb: ReturnType<typeof getSupabase> & {}, userId: string, opts?: { silent?: boolean }) {
-    // Silent background refreshes (realtime, token events, small profile
-    // tweaks) must not flip the global loader — RequireCouple renders a
-    // full-screen splash while dataLoading is true, which reads as a
-    // "page refresh".
     if (!opts?.silent) setDataLoading(true);
     try {
       // find couple via membership
-      const { data: membership } = await sb
+      let membership = await sb
         .from("couple_members")
         .select("couple_id, role")
         .eq("user_id", userId)
         .limit(1)
-        .maybeSingle();
+        .maybeSingle()
+        .then((r) => r.data as { couple_id: string; role: string } | null);
+
+      // Recover orphaned couple from the earlier RLS bug: a couple was
+      // created but the membership row failed, so the user loops on
+      // /welcome forever. If we find a couple they created, repair it.
+      if (!membership) {
+        const { data: orphan } = await sb
+          .from("couples")
+          .select("id")
+          .eq("created_by", userId)
+          .limit(1)
+          .maybeSingle();
+        if (orphan) {
+          const oid = (orphan as { id: string }).id;
+          const { error: repairErr } = await sb
+            .from("couple_members")
+            .upsert({ couple_id: oid, user_id: userId, role: "owner" }, { onConflict: "couple_id,user_id" });
+          if (!repairErr) {
+            membership = { couple_id: oid, role: "owner" };
+          } else if (import.meta.env.DEV) {
+            console.warn("[twofold] orphan repair failed", repairErr.message);
+          }
+        }
+      }
+
       if (!membership) {
         setCouple(null);
         setRole(null);
         return;
       }
-      const cid = (membership as { couple_id: string; role: string }).couple_id;
-      setRole((membership as { role: string }).role ?? null);
+      const cid = membership.couple_id;
+      setRole(membership.role ?? null);
       const [{ data: cpl }, { data: mems }, { data: nts }, { data: tls }, { data: pls }, { data: wsh }] = await Promise.all([
         sb.from("couples").select("*").eq("id", cid).single(),
         sb.from("memories").select("*, memory_photos(*)").eq("couple_id", cid).order("date", { ascending: false }),
