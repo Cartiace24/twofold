@@ -360,15 +360,15 @@ export default function Photobooth() {
 
       {stage === "camera" ? (
         <>
-          {/* preview — single stable video so the stream is never lost on frame/camera switch */}
-          <div className="flex-1 min-h-[300px] relative bg-[#141110] overflow-hidden">
+          {/* preview — larger so you actually see yourself */}
+          <div className="flex-[1.7] min-h-[48dvh] sm:min-h-[52dvh] relative bg-[#141110] overflow-hidden">
             {/* stable camera element — always mounted so srcObject is never lost */}
             <div
               className={`absolute inset-0 flex flex-col justify-center ${
                 cameraOk && frame === "film"
                   ? "film"
                   : cameraOk && frame === "polaroid"
-                    ? "bg-[#FFFEFA] p-3 pb-12"
+                    ? "bg-[#FFFEFA] p-2.5 pb-9 sm:p-3 sm:pb-12"
                     : cameraOk && frame === "square"
                       ? "bg-[#FFFEFA] p-1.5"
                       : "bg-[#141110]"
@@ -495,8 +495,8 @@ export default function Photobooth() {
             )}
           </div>
 
-          {/* control deck */}
-          <div className="border-t border-[#E5DAC6] bg-[#FAF6EF] px-4 pt-2.5 pb-[calc(0.9rem+env(safe-area-inset-bottom))]">
+          {/* control deck — scrollable so it never crushes the preview on short phones */}
+          <div className="border-t border-[#E5DAC6] bg-[#FAF6EF] px-4 pt-2.5 pb-[calc(0.9rem+env(safe-area-inset-bottom))] max-h-[42dvh] sm:max-h-none overflow-y-auto no-scrollbar shrink-0">
             {pageError && <p className="text-[14px] font-semibold text-[#7D2E3B] text-center mb-1.5">{pageError}</p>}
             {busy && (
               <p className="text-center font-hand text-[21px] text-[#8A7F72] mb-1.5 inline-flex w-full justify-center items-center gap-2">
