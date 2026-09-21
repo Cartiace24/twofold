@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { Copy, LogOut, RefreshCw, Trash2, LogOutIcon, UserX } from "lucide-react";
+import { LogOut, Trash2, LogOutIcon, UserX } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { daysTogether, formatDate, formatDays, todayISO } from "../lib/format";
 import { Button, Field, Input } from "../components/ui/primitives";
-import { SectionHeading, Tape } from "../components/scrapbook/bits";
+import { InviteCodeCard } from "../components/InviteCode";
+import { SectionHeading } from "../components/scrapbook/bits";
 import { filesToDataUrls } from "../lib/image";
 
 export default function Profile() {
@@ -15,7 +16,6 @@ export default function Profile() {
   const [accent, setAccent] = useState(couple?.accent ?? "#7D2E3B");
   const [saved, setSaved] = useState("");
   const [busy, setBusy] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [dangerBusy, setDangerBusy] = useState<string | null>(null);
   const [dangerErr, setDangerErr] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -98,17 +98,8 @@ export default function Profile() {
         </div>
       </div>
 
-      {/* invite */}
-      <div className="relative mt-4 bg-[#E7EBDD] border border-[#A8B89A]/60 p-5 rotate-[0.4deg]">
-        <Tape className="left-8 -top-[11px]" tone="sage" />
-        <h3 className="font-display font-semibold text-[18px]">Invite your person</h3>
-        <p className="text-[14px] text-[#4A423B]">They sign up, tap “Join theirs”, enter this code. That's it.</p>
-        <div className="mt-3 flex items-center gap-2">
-          <code className="flex-1 text-center font-mono font-bold tracking-[0.3em] text-[20px] bg-[#FFFDF7] border border-[#A8B89A]/60 py-2.5 rounded-[3px]">{couple.invite_code}</code>
-          <button onClick={() => { navigator.clipboard?.writeText(couple.invite_code); setCopied(true); setTimeout(() => setCopied(false), 1800); }} className="touch px-4 border border-[#6B7F5E] rounded-[3px] bg-[#FFFDF7] font-bold text-[14px] inline-flex items-center gap-1.5"><Copy size={15} /> {copied ? "Copied!" : "Copy"}</button>
-        </div>
-        <button onClick={regenerateCode} className="mt-2 inline-flex items-center gap-1 text-[13px] underline text-[#6B7F5E]"><RefreshCw size={13} /> new code</button>
-      </div>
+      {/* invite — now using the shared accessible card */}
+      <InviteCodeCard code={couple.invite_code} onRegenerate={regenerateCode} />
 
       {/* stats */}
       <p className="font-hand text-[21px] text-[#8A7F72] text-center mt-5">collected so far ♡</p>

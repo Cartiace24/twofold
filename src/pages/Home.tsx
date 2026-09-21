@@ -4,11 +4,12 @@ import { BookHeart, Camera, Heart, MapPin, NotebookPen, Plus } from "lucide-reac
 import { useApp } from "../store/AppContext";
 import { daysTogether, formatDate, formatDays } from "../lib/format";
 import { Divider, Doodle, Polaroid, SectionHeading, Tape } from "../components/scrapbook/bits";
+import { InviteCodeCard } from "../components/InviteCode";
 import { hashSeedPick } from "../lib/variation";
 import { Empty } from "../components/ui/primitives";
 
 export default function Home({ onAdd }: { onAdd: () => void }) {
-  const { couple, memories, notes, timeline, places, toggleMemoryFav } = useApp();
+  const { couple, memories, notes, timeline, places, toggleMemoryFav, regenerateCode } = useApp();
   const days = couple ? daysTogether(couple.together_since) : 0;
   const recent = useMemo(() => memories.slice(0, 4), [memories]);
   const latestNotes = useMemo(() => notes.slice(0, 2), [notes]);
@@ -37,6 +38,11 @@ export default function Home({ onAdd }: { onAdd: () => void }) {
         </p>
         <p className="font-hand text-[20px] text-[#8A7F72] mt-1 max-w-[36ch] mx-auto leading-snug break-words">{couple.description}</p>
         <Doodle kind="squiggle" className="mx-auto mt-2 text-[#B6AA99]" aria-hidden />
+      </section>
+
+      {/* invite — most asked for, so it's right under your names */}
+      <section className="mt-5" aria-label="Invite code">
+        <InviteCodeCard code={couple.invite_code} onRegenerate={regenerateCode} />
       </section>
 
       {/* quick add */}

@@ -10,9 +10,10 @@ import {
 } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { Doodle, Tape } from "../components/scrapbook/bits";
+import { InviteCodeCard } from "../components/InviteCode";
 
 export default function More() {
-  const { couple, signOut, memories, notes, places, wishlist, timeline } = useApp();
+  const { couple, signOut, memories, notes, places, wishlist, timeline, regenerateCode } = useApp();
 
   const previewUrls = memories.flatMap((m) => m.photos.map((p) => p.url)).slice(0, 6);
   const p0 = previewUrls[0] ?? "https://picsum.photos/seed/twofold-more-p1/400/400";
@@ -21,8 +22,14 @@ export default function More() {
 
   return (
     <div className="px-4 pb-10 max-w-[560px] mx-auto lg:max-w-2xl">
+      {/* invite at the very top of the drawer — you open More to find it */}
+      {couple && (
+        <div className="mt-4">
+          <InviteCodeCard code={couple.invite_code} onRegenerate={regenerateCode} />
+        </div>
+      )}
       {/* header — tight, with the little sticky note from the mockup */}
-      <div className="relative pt-4 text-center">
+      <div className="relative pt-5 text-center">
         <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-[#8B5E3C]">everything else</p>
         <h1 className="font-display text-[32px] font-semibold tracking-tight leading-none mt-1">More</h1>
         {couple && <p className="font-hand text-[19px] text-[#8A7F72] leading-none mt-1">{couple.name} ♡</p>}
