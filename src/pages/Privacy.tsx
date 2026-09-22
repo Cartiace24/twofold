@@ -1,142 +1,97 @@
 import LegalShell from "../components/LegalShell";
-import { LEGAL_PLACEHOLDERS, PRIVACY_VERSION } from "../lib/legal";
 
 export default function Privacy() {
-  const P = LEGAL_PLACEHOLDERS;
   return (
-    <LegalShell title="Privacy Policy" intro="What we actually collect, why, and your rights under Philippine law — in plain language.">
+    <LegalShell title="Privacy Policy" intro="Last updated September 22, 2026">
+      <h2>The short version</h2>
+      <p>Twofold is a private digital scrapbook for couples. Information is collected to create accounts, connect couples, store personal content, and provide Twofold’s features.</p>
+      <p>Twofold does not sell personal information.</p>
+      <p>Reasonable measures are used to protect personal information, but no online service can guarantee absolute security.</p>
+
+      <h2>Who operates Twofold</h2>
+      <p>Twofold is operated by <strong>Isaiah Serrano</strong>.</p>
+      <p>Privacy contact:</p>
       <p>
-        This notice explains how <strong>{P.BUSINESS_NAME}, the operator of Twofold</strong> handles personal information in the Philippines,
-        with <strong>Republic Act No. 10173 — Data Privacy Act of 2012 (DPA)</strong>, its IRR, and NPC guidance in mind — especially
-        transparency, legitimate purpose, and proportionality. It’s the privacy notice for Twofold, not legal advice and not an NPC approval.
+        <a href="mailto:saulisaiah24@gmail.com">saulisaiah24@gmail.com</a>
       </p>
 
-      <h2>Who is the controller?</h2>
-      <p>
-        The Personal Information Controller is <strong>{P.BUSINESS_NAME}, the operator of Twofold</strong> (placeholder until the real operator is
-        supplied). Reach us at:
-      </p>
+      <h2>What information is collected</h2>
+      <p>Depending on how Twofold is used, the service may collect:</p>
       <ul>
-        <li>Privacy / data-subject requests: {P.PRIVACY_EMAIL}</li>
-        <li>Legal: {P.LEGAL_EMAIL} · General: {P.CONTACT_EMAIL} · Address: {P.BUSINESS_ADDRESS}</li>
+        <li>Account information, such as an email address and authentication information</li>
+        <li>Couple membership and invite information</li>
+        <li>Photos and images uploaded by users</li>
+        <li>Memories, notes, milestones, and timeline entries</li>
+        <li>Places and location information voluntarily saved by users</li>
+        <li>Wishlist items and other content created in the app</li>
+        <li>Basic technical information needed for the application to function</li>
       </ul>
-      <p>No Data Protection Officer is listed — we don’t invent one. If a DPO is appointed or required, we’ll list them here.</p>
+      <p>Twofold aims to collect information relevant to providing its features.</p>
 
-      <h2>What we collect — only what the app actually uses</h2>
-      <p>Inspected from <code>supabase/schema.sql</code> and the live code. No ads, behavioral tracking, or fingerprinting was found.</p>
+      <h2>How information is used</h2>
+      <p>Personal information may be used to:</p>
       <ul>
-        <li>
-          <strong>Account</strong> — email, user ID, display name/avatar you set, password verifier (held by Supabase Auth), provider ID if you use
-          Google OAuth, timestamps.
-        </li>
-        <li>
-          <strong>Couple</strong> — couple ID, membership (user ID + role owner/member), invite code and whether you created/joined, couple
-          profile (name, together-since, description, accent, cover/avatar URLs).
-        </li>
-        <li>
-          <strong>Diary you add</strong> — photos (compressed JPEG in <code>memory_photos.url</code> today; private bucket{" "}
-          <code>couple-photos</code> is provisioned but not yet the write path), memories (title/caption/date/location/tags/creator), notes
-          (body/style/author), timeline (title/date/description/photo/location), places (name/desc/lat-lng/photo/linked memory), wishlist
-          (title/category/note/done), and <code>created_by</code> where stored.
-        </li>
-        <li>
-          <strong>Technical</strong> — only what browsers/hosts necessarily see (IP, request time, error logs via Vercel/Supabase). No
-          advertising IDs, no behavioral analytics, no location tracking beyond the place you intentionally enter, no profiling.
-        </li>
+        <li>Create and manage accounts</li>
+        <li>Connect users with their partner</li>
+        <li>Store and display user content</li>
+        <li>Provide Twofold features</li>
+        <li>Maintain service security</li>
+        <li>Diagnose technical problems</li>
+        <li>Respond to support requests</li>
+        <li>Meet applicable legal or security requirements</li>
       </ul>
+      <p>Private couple content is not used for advertising.</p>
 
-      <h2>Private by default</h2>
-      <p>
-        A Couple space is visible only to its two members. Every couple-scoped table is gated by <strong>Row Level Security</strong>{" "}
-        (<code>is_couple_member</code>). Non-members can’t read another couple’s rows. Photos today live as compressed JPEG text in
-        RLS-protected rows (long edge 1600, JPEG ~0.82), not as public URLs — the private <code>couple-photos</code> bucket exists but isn’t
-        the active write path. No public bucket is used. We don’t claim end-to-end encryption or that no operator could ever access data.
-      </p>
+      <h2>Photos and personal content</h2>
+      <p>Users retain ownership of content uploaded to Twofold.</p>
+      <p>Photos, memories, notes, places, and other content are stored so that Twofold can provide the features associated with that content.</p>
+      <p>Twofold is designed around private couple sharing. Content is not intended to be publicly displayed unless a feature specifically allows or requires public sharing.</p>
 
-      <h2>Photobooth</h2>
-      <p>
-        The camera runs only when you open Photobooth and only after your browser’s permission prompt. You can pick front/rear, and the stream is
-        stopped when you leave. Only the photo you tap “Use Photo” on is processed (canvas) and saved through the same private, compressed flow.
-        We don’t continuously record you.
-      </p>
+      <h2>Who can access information</h2>
+      <p>Couple content is intended to be accessible only to members of the relevant couple through the application’s access controls.</p>
+      <p>Twofold may use third-party service providers for authentication, database storage, file storage, hosting, maps, and other infrastructure required to operate the application.</p>
+      <p>Twofold does not sell personal information.</p>
 
-      <h2>How we lawfully process (DPA)</h2>
-      <p>Not everything is “consent.” Examples under the DPA:</p>
+      <h2>Data security</h2>
+      <p>Twofold uses access controls, authentication, database security rules, and other reasonable technical measures to protect information.</p>
+      <p>No website, application, or internet transmission can be guaranteed to be completely secure.</p>
+      <p>Users should keep account credentials and devices secure and report suspected unauthorized access.</p>
+
+      <h2>Data retention and deletion</h2>
+      <p>Account and content information is generally retained while an account remains active.</p>
+      <p>When an account is deleted, associated information is removed or deleted where reasonably possible.</p>
+      <p>Certain information may be retained when required by law or reasonably necessary for security, fraud prevention, dispute resolution, or other legitimate purposes.</p>
+
+      <h2>Privacy rights</h2>
+      <p>Under the Data Privacy Act of 2012 (Republic Act No. 10173) and applicable Philippine privacy rules, users may have rights concerning personal information, including the right to:</p>
       <ul>
-        <li>
-          <strong>Contract / steps prior to contract</strong> — creating your account and Couple space you asked for.
-        </li>
-        <li>
-          <strong>Contract + consent where you actively share</strong> — the diary content you voluntarily add for the two of you.
-        </li>
-        <li>
-          <strong>Consent</strong> — a Photobooth photo you actively choose to keep.
-        </li>
-        <li>
-          <strong>Legal obligation / legitimate interest</strong> — password-reset and security, and retention for legal claims where applicable.
-        </li>
+        <li>Be informed about how personal information is processed</li>
+        <li>Access personal information</li>
+        <li>Request correction of inaccurate information</li>
+        <li>Object to certain processing</li>
+        <li>Request deletion or blocking where applicable</li>
+        <li>Request data portability where applicable</li>
+        <li>Seek remedies available under applicable law</li>
+        <li>File a complaint with the National Privacy Commission</li>
       </ul>
-      <p>We don’t use blanket consent as a substitute for the real basis.</p>
-
-      <h2>Who receives it</h2>
-      <ul>
-        <li>Your partner — within the same Couple, you share what you both add.</li>
-        <li>
-          <strong>Processors actually used:</strong> Supabase (auth, Postgres, provisioned storage), Vercel (hosting), OpenStreetMap/Leaflet for map
-          tiles where you use Our Places, and Google OAuth only if you use it and it’s enabled.
-        </li>
-        <li>We don’t sell personal data. Each processor’s own privacy documentation governs its handling.</li>
-      </ul>
-
-      <h2>How long we keep it</h2>
+      <p>Privacy requests can be sent to:</p>
       <p>
-        Personal information is kept only as long as necessary for the diary, subject to legal claims or other lawful requirements (DPA Sec. 11).
-      </p>
-      <ul>
-        <li>While your account/Couple exists, your diary stays until you remove it.</li>
-        <li>Deleting a memory/note/place/wishlist entry removes that row (photos cascade) with best-effort Storage removal.</li>
-        <li>Leaving a Couple removes your membership; if you were last, the orphaned Couple and its diary are removed.</li>
-        <li>
-          Deleting your account (Settings) shows: “<em>Deleting your account permanently removes your account and associated Twofold data,
-          subject to any information that must be retained where required or permitted by applicable law.</em>” The RPC then removes memberships,
-          orphaned couples, profile, and <code>auth.users</code>; backups may linger briefly before rotation.
-        </li>
-      </ul>
-      <p>
-        Placeholders until counsel defines them: standard operational retention — [STANDARD OPERATIONAL RETENTION]; backup rotation —
-        [BACKUP ROTATION].
+        <a href="mailto:saulisaiah24@gmail.com">saulisaiah24@gmail.com</a>
       </p>
 
-      <h2>Your rights (RA 10173)</h2>
-      <p>Subject to the Act’s qualifications and exceptions:</p>
-      <ul>
-        <li>be informed (this notice);</li>
-        <li>access your data (in the app or via {P.PRIVACY_EMAIL});</li>
-        <li>correct it (edit in the app);</li>
-        <li>object (where consent/legitimate interest applies);</li>
-        <li>erasure/blocking where applicable;</li>
-        <li>data portability where applicable and technically feasible;</li>
-        <li>damages; and to file a complaint with the National Privacy Commission.</li>
-      </ul>
+      <h2>Changes to this Privacy Policy</h2>
+      <p>This Privacy Policy may be updated when Twofold changes or when legal or operational requirements change.</p>
+      <p>For meaningful changes, the date at the top of this page will be updated and notice may be provided where appropriate.</p>
+
+      <h2>Contact</h2>
+      <p>Privacy questions or requests:</p>
       <p>
-        Contact {P.PRIVACY_EMAIL} to exercise them — we may need to verify you first.
+        Isaiah Serrano
+        <br />
+        <a href="mailto:saulisaiah24@gmail.com">saulisaiah24@gmail.com</a>
       </p>
 
-      <h2>Security & breaches</h2>
-      <p>
-        Reasonable, risk-appropriate measures as the DPA requires: Supabase Auth, RLS on every couple table, private Storage bucket provisioned,
-        session handling, and HTTPS via Vercel. No system is perfectly secure. We handle any personal data breach per the DPA/IRR and applicable
-        NPC Circular, including NPC and, where required, affected-subject notification — without inventing a deadline beyond what the law requires.
-      </p>
-
-      <h2>Changes & contact</h2>
-      <p>
-        We may update this policy (current version {PRIVACY_VERSION}). For material changes we’ll give notice in the app. Questions or
-        requests: {P.PRIVACY_EMAIL} · {P.LEGAL_EMAIL} · {P.CONTACT_EMAIL} · {P.BUSINESS_ADDRESS}. You may also lodge a complaint with the NPC
-        under its procedures (<a href="https://privacy.gov.ph/data-subject-rights/" target="_blank" rel="noreferrer">privacy.gov.ph</a>).
-      </p>
-
-      <p className="text-[12px] text-[#B6AA99]">Version {PRIVACY_VERSION} · Not legal advice. Have a Philippine privacy professional review before relying on this.</p>
+      <p className="text-[12px] text-[#B6AA99]">Version 1.0 · Last updated September 22, 2026</p>
     </LegalShell>
   );
 }
