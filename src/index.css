@@ -169,4 +169,86 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
   padding-bottom: 8px;
 }
 
+/* legal pages — dedicated, predictable typography (not raw prose) */
+.legal-content {
+  max-width: 760px;
+  color: var(--color-ink-soft);
+  line-height: 1.75;
+  text-align: left;
+}
+.legal-content h1 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 32px;
+  line-height: 1.02;
+  letter-spacing: -0.02em;
+  color: var(--color-ink);
+  margin: 0 0 12px;
+}
+@media (min-width: 640px) {
+  .legal-content h1 { font-size: 38px; }
+}
+.legal-content h2 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 20px;
+  line-height: 1.25;
+  color: var(--color-ink);
+  margin-top: 40px;
+  margin-bottom: 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(229, 218, 198, 0.6);
+}
+@media (min-width: 640px) {
+  .legal-content h2 { font-size: 22px; }
+}
+.legal-content h3 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 16px;
+  line-height: 1.4;
+  color: var(--color-ink);
+  margin-top: 28px;
+  margin-bottom: 10px;
+}
+.legal-content p {
+  font-size: 15px;
+  line-height: 1.75;
+  color: var(--color-ink-soft);
+  margin: 0 0 16px;
+}
+.legal-content ul,
+.legal-content ol {
+  margin: 8px 0 24px;
+  padding-left: 24px;
+  list-style-position: outside;
+}
+.legal-content ul { list-style-type: disc; }
+.legal-content ol { list-style-type: decimal; }
+.legal-content li {
+  font-size: 14.5px;
+  line-height: 1.65;
+  color: var(--color-ink-soft);
+  margin-bottom: 8px;
+}
+.legal-content li::marker { color: #B6AA99; }
+.legal-content strong { color: var(--color-ink); font-weight: 600; }
+.legal-content a {
+  color: var(--color-wine);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-color: rgba(125, 46, 59, 0.35);
+}
+.legal-content a:hover { text-decoration-color: var(--color-wine); }
+.legal-content code {
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+  background: #FAF6EF;
+  border: 1px solid var(--color-line);
+  padding: 1px 6px;
+  border-radius: 3px;
+  color: var(--color-ink-soft);
+}
+
 ::selection { background: #E8B4B8; color: #2B2622; }
