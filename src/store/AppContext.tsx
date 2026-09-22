@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { authMode, getSupabase, isSupabaseConfigured } from "../lib/supabase";
 import { makeInviteCode, todayISO, uid } from "../lib/format";
+import { PRIVACY_VERSION, TERMS_VERSION } from "../lib/legal";
 import type { Couple, Memory, Note, Place, Profile, TimelineEvent, WishlistItem } from "../lib/types";
 import { seedCouple, seedMemories, seedNotes, seedPlaces, seedTimeline, seedWishlist } from "../data/seed";
 
@@ -437,6 +438,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
             const u = toUser(data.session.user);
             setUser(u);
             await fetchCoupleData(sb, u.id);
+            // Record legal acceptance — best-effort, never blocks signup
+            try {
+              await sb.from("legal_acceptances").upsert(
+                {
+                  user_id: data.session.user.id,
+                  terms_version: TERMS_VERSION,
+                  privacy_version: PRIVACY_VERSION,
+                },
+                { onConflict: "user_id" }
+              );
+            } catch {
+              /* acceptance table may not exist yet in dev */
+            }
           }
           return {};
         }

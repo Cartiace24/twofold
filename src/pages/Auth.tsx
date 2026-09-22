@@ -50,6 +50,7 @@ export function Signup() {
   const [busy, setBusy] = useState(false);
   const [gBusy, setGBusy] = useState(false);
   const [confirmSent, setConfirmSent] = useState(false);
+  const [agree, setAgree] = useState(false);
 
   if (confirmSent) {
     return (
@@ -71,6 +72,7 @@ export function Signup() {
     e?.preventDefault();
     if (!email.includes("@")) return setErr("That email doesn't look right.");
     if (pw.length < 6) return setErr("Password needs at least 6 characters.");
+    if (!agree) return setErr("Please agree to the Terms and acknowledge the Privacy Policy to continue.");
     setBusy(true); setErr("");
     const r = await signUp(email.trim(), pw, name.trim());
     setBusy(false);
@@ -85,6 +87,18 @@ export function Signup() {
         <Field label="Your name"><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Sam" autoComplete="given-name" /></Field>
         <Field label="Email"><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" autoComplete="email" /></Field>
         <Field label="Password" hint="8+ characters is plenty"><Input type="password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="••••••••" autoComplete="new-password" /></Field>
+        <label className="flex gap-2.5 items-start text-[13px] leading-relaxed text-[#4A423B] py-1">
+          <input
+            type="checkbox"
+            checked={agree}
+            onChange={(e) => setAgree(e.target.checked)}
+            className="mt-0.5 w-[18px] h-[18px] shrink-0 accent-[#7D2E3B]"
+          />
+          <span>
+            I agree to the <Link to="/terms" target="_blank" rel="noreferrer" className="underline font-bold text-[#7D2E3B]">Terms of Service</Link> and
+            acknowledge the <Link to="/privacy" target="_blank" rel="noreferrer" className="underline font-bold text-[#7D2E3B]">Privacy Policy</Link>.
+          </span>
+        </label>
         {err && <p className="text-[14px] font-semibold text-[#7D2E3B]" role="alert">{err}</p>}
         <Button type="submit" disabled={busy}>{busy ? "Making a little room…" : "Create our space"}</Button>
         <div className="flex items-center gap-2 text-[12px] font-bold uppercase tracking-[0.14em] text-[#B6AA99]">

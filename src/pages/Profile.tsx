@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { LogOut, Trash2, LogOutIcon, UserX } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { daysTogether, formatDate, formatDays, todayISO } from "../lib/format";
@@ -208,6 +209,15 @@ export default function Profile() {
             </div>
           )}
         </div>
+      </div>
+
+      <div className="mt-8 text-center text-[12.5px] text-[#8A7F72] leading-relaxed">
+        <Link to="/terms" className="underline text-[#7D2E3B] font-bold">Terms</Link>
+        <span className="mx-1.5 text-[#B6AA99]">·</span>
+        <Link to="/privacy" className="underline text-[#7D2E3B] font-bold">Privacy</Link>
+        <span className="mx-1.5 text-[#B6AA99]">·</span>
+        <Link to="/guidelines" className="underline text-[#7D2E3B] font-bold">Guidelines</Link>
+        <span className="mx-1 block mt-1 font-hand text-[16px]">Two Lives, one story — handle with love.</span>
       </div>
     </div>
   );

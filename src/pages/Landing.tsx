@@ -89,7 +89,12 @@ export default function Landing() {
             <p className="font-display text-[26px] font-semibold">We made our own little place on the internet.</p>
             <p className="font-hand text-[21px] text-[#8A7F72] mt-1">yours is one tap away —</p>
             <Link to="/signup" className="touch inline-flex items-center gap-2 mt-4 bg-[#2B2622] text-[#FAF6EF] px-8 rounded-[3px] font-bold">Create your Twofold <ArrowRight size={18} /></Link>
-            <p className="mt-6 text-[12px] uppercase tracking-[0.2em] text-[#B6AA99]">twofold · Two Lives, one story.</p>
+            <p className="mt-4 flex flex-wrap justify-center gap-3 text-[12px] font-bold">
+              <Link to="/terms" className="underline text-[#8A7F72]">Terms</Link>
+              <Link to="/privacy" className="underline text-[#8A7F72]">Privacy</Link>
+              <Link to="/guidelines" className="underline text-[#8A7F72]">Guidelines</Link>
+            </p>
+            <p className="mt-3 text-[12px] uppercase tracking-[0.2em] text-[#B6AA99]">twofold · Two Lives, one story.</p>
           </div>
         </section>
       </main>

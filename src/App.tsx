@@ -15,6 +15,9 @@ const Photobooth = lazy(() => import("./components/photobooth/Photobooth"));
 import Wishlist from "./pages/Wishlist";
 import Profile from "./pages/Profile";
 import More from "./pages/More";
+import Terms from "./pages/Terms";
+import Privacy from "./pages/Privacy";
+import Guidelines from "./pages/Guidelines";
 import { DesktopSidebar, MobileNav, QuickAddSheet, TopBar } from "./components/layout/chrome";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -127,6 +130,9 @@ function RootRoutes() {
       <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
       <Route path="/reset" element={<Reset />} />
       <Route path="/welcome" element={<RequireAuth><Onboarding /></RequireAuth>} />
+      <Route path="/terms" element={<Terms />} />
+      <Route path="/privacy" element={<Privacy />} />
+      <Route path="/guidelines" element={<Guidelines />} />
       <Route path="/*" element={<RequireAuth><RequireCouple><AuthedShell /></RequireCouple></RequireAuth>} />
     </Routes>
   );

@@ -118,16 +118,24 @@ create table if not exists public.wishlist_items (
   created_at timestamptz default now()
 );
 
--- helper: is member?
+-- helpers: RLS helpers must be SECURITY DEFINER so policies can evaluate
+-- without recursion; they are intentionally executable by authenticated
+-- (required for RLS) but never by anon. Hardened with empty search_path.
 create or replace function public.is_couple_member(cid uuid)
-returns boolean language sql stable security definer set search_path = public as $$
-  select exists (select 1 from public.couple_members where couple_id = cid and user_id = auth.uid());
+returns boolean language sql stable security definer set search_path = '' as $$
+  select exists (select 1 from public.couple_members where public.couple_members.couple_id = cid and public.couple_members.user_id = auth.uid());
 $$;
+revoke all on function public.is_couple_member(uuid) from public;
+revoke all on function public.is_couple_member(uuid) from anon;
+grant execute on function public.is_couple_member(uuid) to authenticated;
 
 create or replace function public.is_couple_owner(cid uuid)
-returns boolean language sql stable security definer set search_path = public as $$
-  select exists (select 1 from public.couple_members where couple_id = cid and user_id = auth.uid() and role = 'owner');
+returns boolean language sql stable security definer set search_path = '' as $$
+  select exists (select 1 from public.couple_members where public.couple_members.couple_id = cid and public.couple_members.user_id = auth.uid() and public.couple_members.role = 'owner');
 $$;
+revoke all on function public.is_couple_owner(uuid) from public;
+revoke all on function public.is_couple_owner(uuid) from anon;
+grant execute on function public.is_couple_owner(uuid) to authenticated;
 
 -- RLS
 alter table public.profiles enable row level security;
@@ -197,22 +205,29 @@ create policy "couple rw wishlist" on public.wishlist_items for all using (publi
 -- Invite-code lookup for joining. A partner who is NOT yet a member cannot
 -- SELECT from couples (see policies above), so the app resolves the code
 -- through this function, which returns only the couple id — never the row.
+-- SECURITY DEFINER is genuinely required (INVOKER would be blocked by RLS);
+-- it is hardened with an empty search_path and qualified names, and only
+-- authenticated users are allowed to call it (anonymous never needs it —
+-- joining requires login, see src/store/AppContext.tsx:726).
 create or replace function public.couple_id_for_invite(p_code text)
-returns uuid language sql stable security definer set search_path = public as $$
-  select id from public.couples where invite_code = upper(trim(p_code)) limit 1;
+returns uuid language sql stable security definer set search_path = '' as $$
+  select public.couples.id from public.couples where public.couples.invite_code = upper(trim(p_code)) limit 1;
 $$;
 revoke all on function public.couple_id_for_invite(text) from public;
+revoke all on function public.couple_id_for_invite(text) from anon;
+revoke all on function public.couple_id_for_invite(text) from authenticated;
 grant execute on function public.couple_id_for_invite(text) to authenticated;
 
 -- Self-service account deletion. Deletes the auth user and lets
 -- ON DELETE CASCADE clean profiles / memberships. Orphan couples (no
 -- members left) are removed as well. Storage objects are best-effort
--- deleted by the client before calling this.
+-- deleted by the client before calling this. Only authenticated users
+-- may call it (anon never needs it).
 create or replace function public.delete_own_account()
 returns void
 language plpgsql
 security definer
-set search_path = public, auth
+set search_path = ''
 as $$
 declare
   uid uuid := auth.uid();
@@ -220,16 +235,14 @@ begin
   if uid is null then
     raise exception 'not authenticated';
   end if;
-
-  -- leave all couples; delete orphaned couples (cascades to memories etc.)
-  delete from public.couple_members where user_id = uid;
-  delete from public.couples where id not in (select couple_id from public.couple_members);
-
-  delete from public.profiles where id = uid;
-  delete from auth.users where id = uid;
+  delete from public.couple_members where public.couple_members.user_id = uid;
+  delete from public.couples where public.couples.id not in (select public.couple_members.couple_id from public.couple_members);
+  delete from public.profiles where public.profiles.id = uid;
+  delete from auth.users where auth.users.id = uid;
 end;
 $$;
 revoke all on function public.delete_own_account() from public;
+revoke all on function public.delete_own_account() from anon;
 grant execute on function public.delete_own_account() to authenticated;
 
 -- storage: private bucket `couple-photos` (create in dashboard), path = <couple_id>/...
@@ -237,6 +250,21 @@ grant execute on function public.delete_own_account() to authenticated;
 -- create policy "member upload" on storage.objects for insert with check (bucket_id='couple-photos' and public.is_couple_member((string_to_array(name,'/'))[1]::uuid));
 -- create policy "member read" on storage.objects for select using (bucket_id='couple-photos' and public.is_couple_member((string_to_array(name,'/'))[1]::uuid));
 -- create policy "member delete" on storage.objects for delete using (bucket_id='couple-photos' and public.is_couple_member((string_to_array(name,'/'))[1]::uuid));
+
+-- Legal acceptances — records the version the user acknowledged at signup
+create table if not exists public.legal_acceptances (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  terms_version text not null,
+  privacy_version text not null,
+  accepted_at timestamptz not null default now()
+);
+alter table public.legal_acceptances enable row level security;
+drop policy if exists "own legal acceptance" on public.legal_acceptances;
+create policy "own legal acceptance" on public.legal_acceptances
+  for all
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid());
+create index if not exists legal_acceptances_user_idx on public.legal_acceptances(user_id);
 
 -- realtime: enable publication
 -- alter publication supabase_realtime add table public.memories, public.notes, public.wishlist_items, public.timeline_events, public.places;
