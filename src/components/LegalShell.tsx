@@ -33,15 +33,15 @@ function LegalShell({
 
           <div className="mt-6 h-px bg-[#E5DAC6]" aria-hidden />
 
-          <nav className="mt-4 flex flex-wrap gap-2 text-[13px] font-bold" aria-label="Legal pages">
-            <Link to="/terms" className="underline text-[#7D2E3B]">Terms</Link>
+          <nav className="mt-5 flex flex-wrap gap-2 text-[13px] font-bold" aria-label="Legal pages">
+            <Link to="/terms" className="underline underline-offset-2 text-[#7D2E3B] hover:text-[#2B2622]">Terms</Link>
             <span className="text-[#B6AA99]">·</span>
-            <Link to="/privacy" className="underline text-[#7D2E3B]">Privacy</Link>
+            <Link to="/privacy" className="underline underline-offset-2 text-[#7D2E3B] hover:text-[#2B2622]">Privacy</Link>
             <span className="text-[#B6AA99]">·</span>
-            <Link to="/guidelines" className="underline text-[#7D2E3B]">Guidelines</Link>
+            <Link to="/guidelines" className="underline underline-offset-2 text-[#7D2E3B] hover:text-[#2B2622]">Guidelines</Link>
           </nav>
 
-          <article className="mt-8 prose prose-neutral max-w-none prose-p:leading-relaxed prose-a:text-[#7D2E3B] prose-headings:font-display prose-headings:tracking-tight prose-headings:font-semibold prose-h2:text-[22px] prose-h2:mt-8 prose-h2:mb-3 prose-h3:text-[16px] prose-h3:mt-6 prose-p:text-[15px] prose-p:text-[#4A423B] prose-li:text-[14.5px] prose-li:text-[#4A423B] prose-strong:text-[#2B2622]">
+          <article className="mt-10 prose prose-neutral max-w-none text-left prose-p:my-4 prose-p:leading-[1.75] prose-p:text-[15.5px] prose-p:text-[#4A423B] prose-a:text-[#7D2E3B] prose-a:font-semibold prose-a:underline prose-a:underline-offset-2 prose-a:decoration-[#7D2E3B]/30 hover:prose-a:decoration-[#7D2E3B] prose-headings:font-display prose-headings:tracking-tight prose-headings:font-semibold prose-headings:text-[#2B2622] prose-h2:text-[24px] prose-h2:leading-tight prose-h2:mt-12 prose-h2:mb-4 prose-h2:pb-3 prose-h2:border-b prose-h2:border-[#E5DAC6]/60 prose-h3:text-[17px] prose-h3:leading-snug prose-h3:mt-8 prose-h3:mb-3 prose-h3:text-[#4A423B] prose-ul:my-6 prose-ul:pl-6 prose-ul:list-disc prose-ul:space-y-2.5 prose-ul:marker:text-[#B6AA99] prose-li:text-[14.5px] prose-li:leading-relaxed prose-li:text-[#4A423B] prose-strong:text-[#2B2622] prose-strong:font-semibold">
             {children}
           </article>
 
