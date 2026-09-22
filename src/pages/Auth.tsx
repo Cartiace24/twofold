@@ -87,6 +87,10 @@ export function Signup() {
         <Field label="Your name"><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Sam" autoComplete="given-name" /></Field>
         <Field label="Email"><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" autoComplete="email" /></Field>
         <Field label="Password" hint="8+ characters is plenty"><Input type="password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="••••••••" autoComplete="new-password" /></Field>
+        <p className="text-[13px] leading-relaxed text-[#4A423B]">
+          By creating an account, you agree to the <Link to="/terms" target="_blank" rel="noreferrer" className="underline font-bold text-[#7D2E3B]">Terms of Service</Link> and acknowledge the{" "}
+          <Link to="/privacy" target="_blank" rel="noreferrer" className="underline font-bold text-[#7D2E3B]">Privacy Policy</Link>. You must be 18 or older.
+        </p>
         <label className="flex gap-2.5 items-start text-[13px] leading-relaxed text-[#4A423B] py-1">
           <input
             type="checkbox"
@@ -95,7 +99,7 @@ export function Signup() {
             className="mt-0.5 w-[18px] h-[18px] shrink-0 accent-[#7D2E3B]"
           />
           <span>
-            I agree to the <Link to="/terms" target="_blank" rel="noreferrer" className="underline font-bold text-[#7D2E3B]">Terms of Service</Link> and
+            I agree to the <Link to="/terms" target="_blank" rel="noreferrer" className="underline font-bold text-[#7D2E3B]">Terms</Link> and
             acknowledge the <Link to="/privacy" target="_blank" rel="noreferrer" className="underline font-bold text-[#7D2E3B]">Privacy Policy</Link>.
           </span>
         </label>
