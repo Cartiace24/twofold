@@ -51,6 +51,9 @@ export default function Profile() {
   useEffect(() => () => {
     if (accentTimer.current) window.clearTimeout(accentTimer.current);
   }, []);
+  useEffect(() => {
+    if (couple?.accent) setAccent(couple.accent);
+  }, [couple?.accent]);
 
   const changeAccent = (value: string) => {
     setAccent(value);
@@ -133,7 +136,8 @@ export default function Profile() {
             </span>
             <div>
               <h2 className="font-display text-[24px] font-semibold leading-none">{couple.name}</h2>
-              <p className="text-[13px] font-bold text-[#7D2E3B] mt-1">{formatDays(daysTogether(couple.together_since))} days · since {formatDate(couple.together_since)}</p>
+              <p className="text-[13px] font-bold mt-1" style={{ color: accent }}>{formatDays(daysTogether(couple.together_since))} days · since {formatDate(couple.together_since)}</p>
+              <span className="inline-block mt-1.5 h-1.5 w-16 rounded-full" style={{ background: accent, opacity: 0.9 }} aria-hidden />
             </div>
           </div>
 

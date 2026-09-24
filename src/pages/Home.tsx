@@ -47,9 +47,10 @@ export default function Home({ onAdd }: { onAdd: () => void }) {
           </div>
         </div>
         <h2 className="font-display text-[34px] sm:text-[40px] font-semibold tracking-tight mt-2">{couple.name}</h2>
-        <p className="font-display italic text-[18px] text-[#7D2E3B] mt-0.5">
+        <p className="font-display italic text-[18px] mt-0.5" style={{ color: couple.accent || "#7D2E3B" }}>
           {formatDays(days)} days together <span aria-hidden>♡</span>
         </p>
+        <span className="inline-block mt-2 h-1 w-12 rounded-full" style={{ background: couple.accent || "#7D2E3B", opacity: 0.9 }} aria-hidden />
         <p className="font-hand text-[20px] text-[#8A7F72] mt-1 max-w-[36ch] mx-auto leading-snug break-words">{couple.description}</p>
         <Doodle kind="squiggle" className="mx-auto mt-2 text-[#B6AA99]" aria-hidden />
       </section>
