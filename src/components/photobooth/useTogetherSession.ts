@@ -169,20 +169,25 @@ export function useTogetherSession(
       return true;
     }
     // Someone else started it — realtime will deliver the countdown.
-    return true;
+    // Return false so the caller can stand by instead of assuming success.
+    return false;
   }, [sb]);
 
   const uploadPhoto = useCallback(
     async (dataUrl: string) => {
       const s = sessionRef.current;
-      if (!sb || !s || !role) return;
+      if (!sb || !s || !role) return false;
       const patch =
         role === "creator"
           ? { creator_photo: dataUrl, creator_seen_at: nowISO() }
           : { partner_photo: dataUrl, partner_seen_at: nowISO() };
       setSession((prev) => (prev ? { ...prev, ...patch } : prev));
       const { error } = await sb.from("photobooth_sessions").update(patch).eq("id", s.id);
-      if (error) setError("Couldn't upload your photo — check connection and try retake?");
+      if (error) {
+        setError("Couldn't upload your photo — check connection and try retake?");
+        return false;
+      }
+      return true;
     },
     [sb, role]
   );

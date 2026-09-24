@@ -84,6 +84,8 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
   useEffect(() => {
     capturedRef.current = null;
     composingRef.current = false;
+    setCapState("idle");
+    setCount(null);
   }, [session?.id]);
 
   // Partner hit retake (or a fresh round started) → both clients return to
@@ -102,6 +104,7 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
       capturedRef.current = null;
       composingRef.current = false;
       setCount(null);
+      setCapState("idle");
       setPageError("");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -116,30 +119,47 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.id, session?.status, role, ownReady, cameraOk, resultUrl]);
 
+  const [capState, setCapState] = useState<"idle" | "capturing" | "uploading" | "done" | "failed">("idle");
+
   const doCapture = useCallback(async () => {
     const video = videoRef.current;
     const s = sessionRef.current;
+    if (typeof console !== "undefined") {
+      // eslint-disable-next-line no-console
+      console.info("[twofold] together capture", { hasVideo: !!video, hasSession: !!s });
+    }
     if (!video || !s) {
+      setCapState("failed");
       setPageError("Couldn't grab that frame — try retake?");
       return;
     }
     setPageError("");
+    setCapState("capturing");
     setFlashOn(true);
     await wait(280);
     try {
-      const src = grabFrame(video, mirror);
+      // Smaller than solo captures: two phones upload over mobile data and
+      // both sides wait — 1600px is plenty for the strip.
+      const src = grabFrame(video, mirror, 1600);
       if (!src) throw new Error("camera not ready");
       const preset = BOOTH_PRESETS.find((p) => p.id === s.preset_id) ?? BOOTH_PRESETS[0];
       const graded = gradePhotoCanvas(src, resolveGrade(preset, 100, ADJUST_DEFAULTS));
-      const blob = await canvasToJpeg(graded);
+      const blob = await canvasToJpeg(graded, 0.82);
       const url = await new Promise<string>((res, rej) => {
         const r = new FileReader();
         r.onload = () => res(String(r.result));
         r.onerror = rej;
         r.readAsDataURL(blob);
       });
-      await uploadPhotoRef.current(url);
+      setCapState("uploading");
+      const ok = await uploadPhotoRef.current(url);
+      setCapState(ok ? "done" : "failed");
+      if (typeof console !== "undefined") {
+        // eslint-disable-next-line no-console
+        console.info("[twofold] together upload", { ok, bytes: blob.size });
+      }
     } catch {
+      setCapState("failed");
       setPageError("Couldn't grab that frame — try retake?");
     } finally {
       setFlashOn(true);
@@ -156,6 +176,7 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
       return;
     }
     if (capturedRef.current === session.capture_at) return;
+    setPageError("");
     const target = new Date(session.capture_at).getTime();
     const id = window.setInterval(() => {
       const remain = Math.ceil((target - Date.now()) / 1000);
@@ -217,8 +238,19 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
     capturedRef.current = null;
     composingRef.current = false;
     setCount(null);
+    setCapState("idle");
     setPageError("");
     void t.retake();
+  };
+
+  const handleTakePhoto = async () => {
+    setPageError("");
+    const started = await t.startCountdown();
+    if (!started) {
+      // Either someone else started (realtime will show the countdown) or
+      // the write failed — the session view will reveal which.
+      setPageError("Hmm — waiting to see the countdown… if nothing happens, try again.");
+    }
   };
 
   const openSave = async () => {
@@ -550,6 +582,7 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
       {/* session state */}
       <div className="border-t border-[#E5DAC6] bg-[#FAF6EF] px-4 pt-3 pb-[calc(1rem+env(safe-area-inset-bottom))] overflow-y-auto no-scrollbar">
         {pageError && <p className="text-[14px] font-semibold text-[#7D2E3B] text-center mb-2">{pageError}</p>}
+        {t.error && <p className="text-[14px] font-semibold text-[#7D2E3B] text-center mb-2">{t.error}</p>}
         {!t.linkOk && (
           <p className="text-[13.5px] font-semibold text-[#8B5E3C] text-center mb-2">
             connection hiccup…{" "}
@@ -591,7 +624,15 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
             {counting || iCaptured ? (
               <div className="text-center py-3">
                 <p className="font-hand text-[24px] text-[#8A7F72]">
-                  {!iCaptured ? "say cheese…" : !otherCaptured ? "uploading…" : "both photos received…"}
+                  {!iCaptured
+                    ? capState === "capturing"
+                      ? "capturing…"
+                      : capState === "uploading"
+                        ? "uploading your photo…"
+                        : "say cheese…"
+                    : !otherCaptured
+                      ? "uploading…"
+                      : "both photos received…"}
                 </p>
                 <div className="mt-2 flex justify-center gap-4 text-[14px] font-bold">
                   <span className={iCaptured ? "text-[#6B7F5E]" : "text-[#8A7F72]"}>
@@ -624,7 +665,7 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
                 {bothReady ? (
                   <>
                     <p className="font-display font-semibold text-[20px]">Both cameras are ready ♡</p>
-                    <Button onClick={() => t.startCountdown()} disabled={!canStart || !cameraOk} className="w-full mt-3">
+                    <Button onClick={handleTakePhoto} disabled={!canStart || !cameraOk} className="w-full mt-3">
                       Take Photo
                     </Button>
                   </>
