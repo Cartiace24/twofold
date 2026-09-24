@@ -284,27 +284,47 @@ export function useTogetherSession(
   }, [sb, coupleId, !!session, chanNonce]);
 
   // ---- derived transitions (idempotent; exactly one client wins) ----
+  // Retried on an interval while the condition holds: if the first write
+  // is lost (flaky mobile data), the session must not wedge in "joined".
 
   useEffect(() => {
     if (!sb || !session) return;
-    if (session.creator_ready && session.partner_ready && session.status === "joined") {
-      void sb
+    if (!(session.creator_ready && session.partner_ready && session.status === "joined")) return;
+    let cancelled = false;
+    const promote = async () => {
+      const { error } = await sb
         .from("photobooth_sessions")
         .update({ status: "ready" })
         .eq("id", session.id)
         .eq("status", "joined");
-    }
+      if (!cancelled && error) setError(`Sync hiccup: ${error.message}`);
+    };
+    void promote();
+    const id = window.setInterval(promote, 5000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
   }, [sb, session]);
 
   useEffect(() => {
     if (!sb || !session) return;
-    if (session.creator_photo && session.partner_photo && session.status === "countdown") {
-      void sb
+    if (!(session.creator_photo && session.partner_photo && session.status === "countdown")) return;
+    let cancelled = false;
+    const promote = async () => {
+      const { error } = await sb
         .from("photobooth_sessions")
         .update({ status: "complete" })
         .eq("id", session.id)
         .eq("status", "countdown");
-    }
+      if (!cancelled && error) setError(`Sync hiccup: ${error.message}`);
+    };
+    void promote();
+    const id = window.setInterval(promote, 5000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
   }, [sb, session]);
 
   // ---- heartbeat so the other side can tell I'm still here ----

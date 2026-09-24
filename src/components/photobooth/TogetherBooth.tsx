@@ -668,6 +668,12 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
                     <Button onClick={handleTakePhoto} disabled={!canStart || !cameraOk} className="w-full mt-3">
                       Take Photo
                     </Button>
+                    {!canStart && !cameraOk && (
+                      <p className="text-[13px] text-[#8A7F72] mt-2">waiting for this camera to warm up…</p>
+                    )}
+                    {!canStart && cameraOk && !t.error && (
+                      <p className="text-[13px] text-[#8A7F72] mt-2">syncing session… hold on ♡</p>
+                    )}
                   </>
                 ) : (
                   <p className="font-hand text-[21px] text-[#8A7F72]">getting both cameras ready…</p>
