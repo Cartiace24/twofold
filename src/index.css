@@ -24,13 +24,24 @@
   --font-body: "Karla", system-ui, sans-serif;
 }
 
+:root {
+  --twofold-bg: #FAF6EF;
+  --twofold-surface: #FFFDF7;
+  --twofold-text: #2B2622;
+  --twofold-muted: #8A7F72;
+  --twofold-accent: #7D2E3B;
+  --twofold-accent-text: #FFFEFA;
+  --twofold-secondary: #B98282;
+  --twofold-border: #E5DAC6;
+}
+
 html {
   -webkit-tap-highlight-color: transparent;
 }
 
 body {
-  background: var(--color-paper);
-  color: var(--color-ink);
+  background: var(--twofold-bg);
+  color: var(--twofold-text);
   font-family: var(--font-body);
   font-size: 16px;
   line-height: 1.55;
@@ -38,9 +49,9 @@ body {
   overscroll-behavior-y: none;
 }
 
-/* paper grain */
+/* paper grain — uses couple theme */
 .paper-grain {
-  background-color: var(--color-paper);
+  background-color: var(--twofold-bg);
   background-image:
     radial-gradient(rgba(139, 94, 60, 0.055) 1px, transparent 1.2px),
     radial-gradient(rgba(139, 94, 60, 0.035) 1px, transparent 1.2px);
@@ -49,10 +60,10 @@ body {
 }
 
 .paper-card {
-  background: var(--color-cream);
+  background: var(--twofold-surface);
   background-image: radial-gradient(rgba(139,94,60,0.05) 1px, transparent 1.1px);
   background-size: 18px 18px;
-  border: 1px solid var(--color-line);
+  border: 1px solid var(--twofold-border);
 }
 
 .ruled {

@@ -19,6 +19,10 @@ create table if not exists public.couples (
   together_since date not null,
   description text default '',
   accent text default '#7D2E3B',
+  secondary_accent text default '#B98282',
+  background text default '#FAF6EF',
+  theme_preset text default 'soft',
+  theme_name text default 'Our Space',
   cover_url text,
   avatar_a_url text,
   avatar_b_url text,
@@ -314,5 +318,5 @@ create policy "profile-photos own delete" on storage.objects for delete to authe
 drop policy if exists "profile-photos partner read" on storage.objects;
 create policy "profile-photos partner read" on storage.objects for select to authenticated using (bucket_id = 'profile-photos' and ((storage.foldername(name))[1]::uuid = auth.uid() or public.is_same_couple((storage.foldername(name))[1]::uuid)));
 
--- realtime: enable publication
--- alter publication supabase_realtime add table public.memories, public.notes, public.wishlist_items, public.timeline_events, public.places;
+-- realtime: enable publication (couples included so partner theme/appearance updates arrive live)
+-- alter publication supabase_realtime add table public.memories, public.notes, public.wishlist_items, public.timeline_events, public.places, public.couples;

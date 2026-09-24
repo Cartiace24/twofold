@@ -15,6 +15,7 @@ const Photobooth = lazy(() => import("./components/photobooth/Photobooth"));
 import Wishlist from "./pages/Wishlist";
 import Profile from "./pages/Profile";
 import More from "./pages/More";
+import Appearance from "./pages/Appearance";
 import Terms from "./pages/Terms";
 import Privacy from "./pages/Privacy";
 import Guidelines from "./pages/Guidelines";
@@ -60,10 +61,11 @@ function AuthedShell() {
     "/wishlist": ["Wishlist", "someday, together"],
     "/profile": ["Profile", "make it yours"],
     "/more": ["More", "everything else"],
+    "/appearance": ["Appearance", "make it yours"],
   };
   const base = "/" + (loc.pathname.split("/")[1] || "home");
   const [title, sub] = titles[base] || titles["/home"];
-  const hideChrome = (loc.pathname.startsWith("/memories/") && loc.pathname !== "/memories") || loc.pathname === "/photobooth";
+  const hideChrome = (loc.pathname.startsWith("/memories/") && loc.pathname !== "/memories") || loc.pathname === "/photobooth" || loc.pathname === "/appearance";
   const isBooth = loc.pathname === "/photobooth";
 
   // Close Quick Add on navigation so it doesn't linger over new pages
@@ -94,6 +96,7 @@ function AuthedShell() {
             <Route path="/photobooth" element={<Suspense fallback={<Splash text="setting up the booth…" />}><Photobooth /></Suspense>} />
             <Route path="/wishlist" element={<Wishlist />} />
             <Route path="/profile" element={<Profile />} />
+            <Route path="/appearance" element={<Appearance />} />
             <Route path="/more" element={<More />} />
             <Route path="*" element={<Navigate to="/home" replace />} />
           </Routes>

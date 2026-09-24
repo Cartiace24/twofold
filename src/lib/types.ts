@@ -16,6 +16,10 @@ export interface Couple {
   together_since: string; // ISO date
   description?: string;
   accent?: string;
+  secondary_accent?: string | null;
+  background?: string | null;
+  theme_preset?: string | null;
+  theme_name?: string | null;
   cover_url?: string | null;
   avatar_a_url?: string | null;
   avatar_b_url?: string | null;

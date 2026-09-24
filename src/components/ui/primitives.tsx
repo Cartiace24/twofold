@@ -15,9 +15,9 @@ export function Button({
       className={cn(
         "touch inline-flex items-center justify-center gap-2 px-5 text-[15px] font-semibold tracking-wide transition active:scale-[0.98] disabled:opacity-60",
         variant === "primary" && "bg-[#2B2622] text-[#FAF6EF] hover:bg-[#4A423B]",
-        variant === "secondary" && "bg-[#FFFDF7] text-[#2B2622] border border-[#E5DAC6] hover:bg-[#F3EBDD]",
-        variant === "ghost" && "bg-transparent text-[#4A423B] hover:bg-[#F3EBDD] px-3",
-        variant === "wine" && "bg-[#7D2E3B] text-[#FFFDF7] hover:bg-[#64232e]",
+        variant === "secondary" && "bg-[var(--twofold-surface)] text-[var(--twofold-text)] border border-[var(--twofold-border)] hover:brightness-95",
+        variant === "ghost" && "bg-transparent text-[var(--twofold-text)] hover:bg-[var(--twofold-bg)] px-3",
+        variant === "wine" && "bg-[var(--twofold-accent)] text-[var(--twofold-accent-text)] hover:opacity-90",
         "rounded-[3px]",
         className
       )}
@@ -36,7 +36,7 @@ export function Field({ label, hint, children }: { label: string; hint?: string;
 }
 
 export const inputCls =
-  "touch w-full bg-[#FFFDF7] border border-[#E5DAC6] rounded-[3px] px-4 text-[16px] text-[#2B2622] placeholder:text-[#B6AA99] outline-none focus:border-[#7D2E3B] focus:ring-2 focus:ring-[#7D2E3B]/15";
+  "touch w-full bg-[var(--twofold-surface)] border border-[var(--twofold-border)] rounded-[3px] px-4 text-[16px] text-[var(--twofold-text)] placeholder:text-[#B6AA99] outline-none focus:border-[var(--twofold-accent)] focus:ring-2 focus:ring-[var(--twofold-accent)]/15";
 
 export function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={cn(inputCls, props.className)} />;

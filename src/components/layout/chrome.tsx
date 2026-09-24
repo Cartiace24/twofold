@@ -10,7 +10,7 @@ import { useApp } from "../../store/AppContext";
 
 export function DesktopSidebar() {
   return (
-    <aside className="hidden lg:flex w-[248px] shrink-0 flex-col border-r border-[#E5DAC6] bg-[#FFFDF7]/60 sticky top-0 h-dvh overflow-y-auto no-scrollbar px-5 py-6 pb-8">
+    <aside className="hidden lg:flex w-[248px] shrink-0 flex-col border-r border-[var(--twofold-border)] bg-[var(--twofold-surface)]/60 sticky top-0 h-dvh overflow-y-auto no-scrollbar px-5 py-6 pb-8">
       <Logo />
       <nav className="mt-8 flex flex-col gap-1 text-[15px] font-medium">
         <SideLink to="/home" icon={Home} label="Home" />
@@ -40,7 +40,7 @@ function SideLink({ to, icon: Icon, label }: { to: string; icon: LucideIcon; lab
       className={({ isActive }) =>
         cn(
           "flex items-center gap-3 px-3 py-2.5 rounded-[3px] transition",
-          isActive ? "bg-[#2B2622] text-[#FAF6EF]" : "text-[#4A423B] hover:bg-[#F3EBDD]"
+          isActive ? "bg-[var(--twofold-accent)] text-[var(--twofold-accent-text)]" : "text-[var(--twofold-text)] hover:bg-[var(--twofold-bg)]"
         )
       }
     >
@@ -74,10 +74,10 @@ export function MobileNav({ onAdd }: { onAdd: () => void }) {
         <Tab to="/home" label="Home" icon={Home} active={loc.pathname === "/home" || loc.pathname === "/"} />
         <Tab to="/memories" label="Memories" icon={BookHeart} active={isActive("/memories")} />
         <button onClick={onAdd} aria-label="Add" className="flex flex-col items-center gap-0.5 -mt-6">
-          <span className="grid place-items-center w-[58px] h-[58px] rounded-full bg-[#7D2E3B] text-[#FFFDF7] border-4 border-[#FAF6EF] shadow-lg active:scale-95 transition">
+          <span className="grid place-items-center w-[58px] h-[58px] rounded-full bg-[var(--twofold-accent)] text-[var(--twofold-accent-text)] border-4 border-[var(--twofold-bg)] shadow-lg active:scale-95 transition">
             <Plus size={26} strokeWidth={2.4} />
           </span>
-          <span className="text-[11px] font-bold tracking-wide text-[#7D2E3B]">Add</span>
+          <span className="text-[11px] font-bold tracking-wide text-[var(--twofold-accent)]">Add</span>
         </button>
         <Tab to="/notes" label="Notes" icon={NotebookPen} active={isActive("/notes")} />
         <Tab to="/more" label="More" icon={Images} active={isActive("/more") || isActive("/gallery") || isActive("/timeline") || isActive("/places") || isActive("/wishlist") || isActive("/profile")} />

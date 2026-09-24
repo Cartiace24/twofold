@@ -5,6 +5,7 @@ import {
   ChevronRight,
   MapPin,
   NotebookPen,
+  Palette,
   Settings,
   Sparkles,
 } from "lucide-react";
@@ -275,6 +276,26 @@ export default function More() {
 
           <ChevronRight size={18} className="text-[#8A7F72] shrink-0 group-active:translate-x-0.5 transition" />
           <span className="absolute right-2 -bottom-1 text-[#7D2E3B] text-[13px]">♡</span>
+        </Link>
+
+        {/* Appearance — couple theme */}
+        <Link
+          to="/appearance"
+          className="group relative flex items-center gap-3 bg-[var(--twofold-surface)] border border-[var(--twofold-border)] p-4 active:scale-[0.98] transition touch overflow-hidden rotate-[0.3deg]"
+        >
+          <span className="w-11 h-11 grid place-items-center bg-[var(--twofold-bg)] border border-[var(--twofold-border)] rounded-[3px] text-[var(--twofold-accent)] shrink-0">
+            <Palette size={20} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="font-display font-semibold text-[18px] leading-none block">Appearance</span>
+            <span className="text-[13px] text-[var(--twofold-muted)] leading-tight block mt-0.5">make this space feel like yours</span>
+            <span className="mt-1 flex gap-1.5">
+              <span className="w-3 h-3 rounded-full border border-black/10" style={{ background: "var(--twofold-accent)" }} aria-hidden />
+              <span className="w-3 h-3 rounded-full border border-black/10" style={{ background: "var(--twofold-secondary)" }} aria-hidden />
+              <span className="w-3 h-3 rounded-full border border-black/10" style={{ background: "var(--twofold-bg)" }} aria-hidden />
+            </span>
+          </span>
+          <ChevronRight size={18} className="text-[var(--twofold-muted)]/60 shrink-0 group-active:translate-x-0.5 transition" />
         </Link>
 
         {/* 4 — Memories · dusty blush, like the mockup */}

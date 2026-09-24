@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Camera, ImagePlus, Loader2, LogOut, Trash2, LogOutIcon, UserX } from "lucide-react";
+import { Camera, ChevronRight, ImagePlus, Loader2, LogOut, Palette, Trash2, LogOutIcon, UserX } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { daysTogether, formatDate, formatDays, todayISO } from "../lib/format";
 import { Button, Field, Input } from "../components/ui/primitives";
@@ -238,6 +238,17 @@ export default function Profile() {
 
       {/* invite — now using the shared accessible card */}
       <InviteCodeCard code={couple.invite_code} onRegenerate={regenerateCode} />
+
+      <Link to="/appearance" className="mt-4 flex items-center gap-3 bg-[var(--twofold-surface)] border border-[var(--twofold-border)] p-4 active:scale-[0.98] transition touch">
+        <span className="w-10 h-10 grid place-items-center bg-[var(--twofold-bg)] border border-[var(--twofold-border)] rounded-[3px] text-[var(--twofold-accent)]">
+          <Palette size={18} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="font-display font-semibold text-[16px] leading-none block">Appearance</span>
+          <span className="text-[13px] text-[var(--twofold-muted)] block">colors & mood for your space</span>
+        </span>
+        <ChevronRight size={16} className="text-[var(--twofold-muted)]/60" />
+      </Link>
 
       {/* stats */}
       <p className="font-hand text-[21px] text-[#8A7F72] text-center mt-5">collected so far ♡</p>

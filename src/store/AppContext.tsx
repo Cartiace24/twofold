@@ -2,6 +2,8 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState, type R
 import { authMode, getSupabase, isSupabaseConfigured } from "../lib/supabase";
 import { makeInviteCode, todayISO, uid } from "../lib/format";
 import { PRIVACY_VERSION, TERMS_VERSION } from "../lib/legal";
+import { applyTheme, themeFromCouple } from "../lib/theme";
+import type { CoupleTheme } from "../lib/theme";
 import type { Couple, Memory, Note, Place, Profile, TimelineEvent, WishlistItem } from "../lib/types";
 import { seedCouple, seedMemories, seedNotes, seedPlaces, seedTimeline, seedWishlist } from "../data/seed";
 
@@ -20,6 +22,7 @@ interface AppState {
   profileLoading: boolean;
   avatarBusy: boolean;
   avatarError: string;
+  theme: CoupleTheme;
   couple: Couple | null;
   authLoading: boolean;
   dataLoading: boolean;
@@ -172,6 +175,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [profileLoading, setProfileLoading] = useState(false);
   const [avatarBusy, setAvatarBusy] = useState(false);
   const [avatarError, setAvatarError] = useState("");
+  const theme = useMemo(() => themeFromCouple(couple), [couple]);
+
+  // Apply the couple-level theme globally through CSS variables.
+  // When there is no couple (or no custom theme), themeFromCouple returns
+  // the default theme, which matches the stock Twofold appearance.
+  useEffect(() => {
+    applyTheme(theme);
+  }, [theme]);
 
   // Tracks the signed-in user id outside subscription closures (which would
   // otherwise capture stale state). Used to ignore duplicate auth events.
@@ -332,6 +343,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       .on("postgres_changes", { event: "*", schema: "public", table: "notes", filter: `couple_id=eq.${cid}` }, refresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "wishlist_items", filter: `couple_id=eq.${cid}` }, refresh)
       .on("postgres_changes", { event: "*", schema: "public", table: "timeline_events", filter: `couple_id=eq.${cid}` }, refresh)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "couples", filter: `id=eq.${cid}` }, refresh)
       .subscribe();
     return () => {
       sb.removeChannel(ch);
@@ -532,6 +544,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       profileLoading,
       avatarBusy,
       avatarError,
+      theme,
       couple,
       authLoading,
       dataLoading,
@@ -1199,7 +1212,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setWishlist((prev) => prev.filter((w) => w.id !== id));
       },
     };
-  }, [user, profile, partnerProfile, avatarUrl, partnerAvatarUrl, couple, memories, notes, timeline, places, wishlist, authLoading, dataLoading, isRecovery, role, profileLoading, avatarBusy, avatarError]);
+  }, [user, profile, partnerProfile, avatarUrl, partnerAvatarUrl, couple, memories, notes, timeline, places, wishlist, authLoading, dataLoading, isRecovery, role, profileLoading, avatarBusy, avatarError, theme]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
