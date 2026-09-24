@@ -5,6 +5,9 @@ export interface Profile {
   email: string;
   display_name: string;
   avatar_url?: string | null;
+  avatar_path?: string | null;
+  created_at?: string;
+  updated_at?: string | null;
 }
 
 export interface Couple {

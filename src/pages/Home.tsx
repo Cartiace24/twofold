@@ -9,7 +9,7 @@ import { hashSeedPick } from "../lib/variation";
 import { Empty } from "../components/ui/primitives";
 
 export default function Home({ onAdd }: { onAdd: () => void }) {
-  const { couple, memories, notes, timeline, places, toggleMemoryFav, regenerateCode } = useApp();
+  const { couple, memories, notes, timeline, places, toggleMemoryFav, regenerateCode, avatarUrl, partnerAvatarUrl, profile, partnerProfile } = useApp();
   const days = couple ? daysTogether(couple.together_since) : 0;
   const recent = useMemo(() => memories.slice(0, 4), [memories]);
   const latestNotes = useMemo(() => notes.slice(0, 2), [notes]);
@@ -24,11 +24,25 @@ export default function Home({ onAdd }: { onAdd: () => void }) {
         <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-[#8B5E3C]">our diary · est. {formatDate(couple.together_since)}</p>
         <div className="mt-3 flex items-center justify-center">
           <div className="flex items-center">
-            <span className="w-[68px] h-[68px] sm:w-[84px] sm:h-[84px] rounded-full border-[3px] border-[#FFFDF7] shadow overflow-hidden bg-[#EDE6D6] -rotate-6">
-              {couple.avatar_a_url ? <img src={couple.avatar_a_url} alt="" className="w-full h-full object-cover" /> : <span className="grid place-items-center h-full font-display font-bold text-[24px]">Y</span>}
+            <span className="w-[68px] h-[68px] sm:w-[84px] sm:h-[84px] rounded-full border-[3px] border-[#FFFDF7] shadow overflow-hidden bg-[#EDE6D6] -rotate-6 grid place-items-center">
+              {avatarUrl ? (
+                <img src={avatarUrl} alt={profile?.display_name ? `${profile.display_name}'s profile photo` : "Your profile photo"} className="w-full h-full object-cover" />
+              ) : couple.avatar_a_url ? (
+                <img src={couple.avatar_a_url} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <span className="font-display font-bold text-[24px] text-[#8B5E3C]">{(profile?.display_name || "Y")[0]?.toUpperCase()}</span>
+              )}
             </span>
-            <span className="w-[68px] h-[68px] sm:w-[84px] sm:h-[84px] rounded-full border-[3px] border-[#FFFDF7] shadow overflow-hidden bg-[#EDE6D6] -ml-4 rotate-6">
-              {couple.avatar_b_url ? <img src={couple.avatar_b_url} alt="" className="w-full h-full object-cover" /> : <span className="grid place-items-center h-full font-display font-bold text-[24px]">M</span>}
+            <span className="w-[68px] h-[68px] sm:w-[84px] sm:h-[84px] rounded-full border-[3px] border-[#FFFDF7] shadow overflow-hidden bg-[#EDE6D6] -ml-4 rotate-6 grid place-items-center">
+              {partnerAvatarUrl ? (
+                <img src={partnerAvatarUrl} alt={partnerProfile?.display_name ? `${partnerProfile.display_name}'s profile photo` : "Partner profile photo"} className="w-full h-full object-cover" />
+              ) : couple.avatar_b_url ? (
+                <img src={couple.avatar_b_url} alt="" className="w-full h-full object-cover" />
+              ) : partnerProfile ? (
+                <span className="font-display font-bold text-[24px] text-[#8B5E3C]">{(partnerProfile.display_name[0] || "M").toUpperCase()}</span>
+              ) : (
+                <span className="font-display font-bold text-[24px] text-[#8B5E3C]">♡</span>
+              )}
             </span>
           </div>
         </div>

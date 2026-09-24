@@ -11,9 +11,10 @@ import {
 import { useApp } from "../store/AppContext";
 import { Doodle, Tape } from "../components/scrapbook/bits";
 import { InviteCodeCard } from "../components/InviteCode";
+import { Avatar } from "../components/profile/Avatar";
 
 export default function More() {
-  const { couple, signOut, memories, notes, places, wishlist, timeline, regenerateCode } = useApp();
+  const { couple, signOut, memories, notes, places, wishlist, timeline, regenerateCode, profile, avatarUrl, user } = useApp();
 
   const previewUrls = memories.flatMap((m) => m.photos.map((p) => p.url)).slice(0, 6);
   const p0 = previewUrls[0] ?? "https://picsum.photos/seed/twofold-more-p1/400/400";
@@ -53,6 +54,16 @@ export default function More() {
           <span className="absolute right-1.5 bottom-1 text-[10px] leading-none">♡</span>
         </div>
       </div>
+
+      {/* your account — face where your name is */}
+      <Link to="/profile" className="mt-4 flex items-center gap-3 bg-[#FFFDF7] border border-[#E5DAC6] p-3 active:scale-[0.98] transition touch">
+        <Avatar src={avatarUrl} name={profile?.display_name || user?.displayName} size={44} />
+        <span className="min-w-0">
+          <span className="font-display font-semibold text-[15px] leading-none block truncate">{profile?.display_name || user?.displayName || "You"}</span>
+          <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#8A7F72] block">Your profile →</span>
+        </span>
+        <ChevronRight size={16} className="text-[#B6AA99] ml-auto" />
+      </Link>
 
       {/* drawer */}
       <div className="mt-5 flex flex-col gap-3">

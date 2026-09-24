@@ -14,6 +14,12 @@ interface User {
 interface AppState {
   user: User | null;
   profile: Profile | null;
+  partnerProfile: Profile | null;
+  avatarUrl: string | null;
+  partnerAvatarUrl: string | null;
+  profileLoading: boolean;
+  avatarBusy: boolean;
+  avatarError: string;
   couple: Couple | null;
   authLoading: boolean;
   dataLoading: boolean;
@@ -41,6 +47,10 @@ interface AppState {
   deleteCouple: () => Promise<{ error?: string }>;
   deleteAccount: () => Promise<{ error?: string }>;
   isOwner: boolean;
+  // avatar
+  uploadAvatar: (blob: Blob) => Promise<{ error?: string }>;
+  removeAvatar: () => Promise<{ error?: string }>;
+  refreshProfiles: () => Promise<void>;
   // memories
   addMemory: (m: Omit<Memory, "id" | "couple_id" | "created_at">) => Promise<string>;
   updateMemory: (id: string, patch: Partial<Memory>) => Promise<void>;
@@ -154,6 +164,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [dataLoading, setDataLoading] = useState(true);
   const [isRecovery, setIsRecovery] = useState(false);
   const [role, setRole] = useState<string | null>(null);
+  // personal profile
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [partnerProfile, setPartnerProfile] = useState<Profile | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [partnerAvatarUrl, setPartnerAvatarUrl] = useState<string | null>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [avatarError, setAvatarError] = useState("");
 
   // Tracks the signed-in user id outside subscription closures (which would
   // otherwise capture stale state). Used to ignore duplicate auth events.
@@ -207,6 +225,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
           setIsRecovery(false);
           setRole(null);
           setCouple(null);
+          setProfile(null);
+          setPartnerProfile(null);
+          setAvatarUrl(null);
+          setPartnerAvatarUrl(null);
           setMemories([]);
           setNotes([]);
           setTimeline([]);
@@ -338,6 +360,63 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  async function signedAvatarUrl(sb: ReturnType<typeof getSupabase> & {}, path: string | null): Promise<string | null> {
+    if (!path || !sb) return null;
+    if (path.startsWith("data:")) return path;
+    // path is like "userId/avatar.jpg"
+    try {
+      const { data, error } = await sb.storage.from("profile-photos").createSignedUrl(path, 60 * 60 * 24 * 30);
+      if (error || !data?.signedUrl) return null;
+      return `${data.signedUrl}&t=${Date.now()}`;
+    } catch {
+      return null;
+    }
+  }
+
+  async function ensureProfile(sb: ReturnType<typeof getSupabase> & {}, uid: string, email: string, displayName: string) {
+    if (!sb) return;
+    const { data } = await sb.from("profiles").select("id").eq("id", uid).maybeSingle();
+    if (!data) {
+      await sb.from("profiles").insert({ id: uid, email, display_name: displayName });
+    }
+  }
+
+  async function loadProfiles(sb: ReturnType<typeof getSupabase> & {}, uid: string, coupleId: string | null) {
+    setProfileLoading(true);
+    try {
+      await ensureProfile(sb, uid, user?.email ?? "", user?.displayName ?? "You");
+      const { data: me } = await sb.from("profiles").select("*").eq("id", uid).maybeSingle();
+      if (me) {
+        setProfile(me as Profile);
+        setAvatarUrl(await signedAvatarUrl(sb, (me as Profile).avatar_path ?? null));
+      }
+      if (coupleId) {
+        const { data: members } = await sb.from("couple_members").select("user_id").eq("couple_id", coupleId);
+        const other = (members ?? []).find((m: { user_id: string }) => m.user_id !== uid) as { user_id: string } | undefined;
+        if (other) {
+          const { data: them } = await sb.from("profiles").select("*").eq("id", other.user_id).maybeSingle();
+          if (them) {
+            setPartnerProfile(them as Profile);
+            setPartnerAvatarUrl(await signedAvatarUrl(sb, (them as Profile).avatar_path ?? null));
+          } else {
+            setPartnerProfile(null);
+            setPartnerAvatarUrl(null);
+          }
+        } else {
+          setPartnerProfile(null);
+          setPartnerAvatarUrl(null);
+        }
+      } else {
+        setPartnerProfile(null);
+        setPartnerAvatarUrl(null);
+      }
+    } catch {
+      /* ignore */
+    } finally {
+      setProfileLoading(false);
+    }
+  }
+
   async function fetchCoupleData(sb: ReturnType<typeof getSupabase> & {}, userId: string, opts?: { silent?: boolean }) {
     if (!opts?.silent) setDataLoading(true);
     try {
@@ -404,13 +483,55 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  // keep personal profiles in sync — own + partner, with signed URLs
+  useEffect(() => {
+    if (!user) {
+      setProfile(null);
+      setPartnerProfile(null);
+      setAvatarUrl(null);
+      setPartnerAvatarUrl(null);
+      setProfileLoading(false);
+      return;
+    }
+    if (isSupabaseConfigured) {
+      const sb = getSupabase();
+      if (sb) void loadProfiles(sb, user.id, couple?.id ?? null);
+    } else {
+      const raw = (() => {
+        try {
+          return localStorage.getItem(LS + "-avatar-" + user.id);
+        } catch {
+          return null;
+        }
+      })();
+      const url = raw && raw.startsWith("data:") ? raw : null;
+      setProfile({ id: user.id, email: user.email, display_name: user.displayName, avatar_path: url ? "demo" : null, avatar_url: url });
+      setAvatarUrl(url);
+      if (couple) {
+        // demo partner — uses seed avatar if available
+        setPartnerProfile({ id: "partner-demo", email: "partner@example.com", display_name: "Mia", avatar_path: null, avatar_url: null });
+        setPartnerAvatarUrl(null);
+      } else {
+        setPartnerProfile(null);
+        setPartnerAvatarUrl(null);
+      }
+      setProfileLoading(false);
+    }
+  }, [user?.id, couple?.id]);
+
   const value: AppState = useMemo(() => {
     const sb = getSupabase();
     const authed = Boolean(user && couple);
 
     return {
       user,
-      profile: user ? { id: user.id, email: user.email, display_name: user.displayName } : null,
+      profile,
+      partnerProfile,
+      avatarUrl,
+      partnerAvatarUrl,
+      profileLoading,
+      avatarBusy,
+      avatarError,
       couple,
       authLoading,
       dataLoading,
@@ -605,6 +726,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
             ].filter(Boolean) as string[];
             await tryCleanupStorage(sb, couple.id, urls);
           }
+          // also try to remove own avatar from storage before account goes away
+          try {
+            if (profile?.avatar_path) await sb.storage.from("profile-photos").remove([profile.avatar_path]);
+          } catch {}
           const { error } = await sb.rpc("delete_own_account");
           if (error) return { error: friendlyAuthError(error.message) };
           await sb.auth.signOut();
@@ -612,6 +737,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
           setIsRecovery(false);
           setRole(null);
           setCouple(null);
+          setProfile(null);
+          setPartnerProfile(null);
+          setAvatarUrl(null);
+          setPartnerAvatarUrl(null);
           setMemories([]);
           setNotes([]);
           setTimeline([]);
@@ -626,10 +755,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
         try {
           localStorage.removeItem(LS);
         } catch {}
+        try {
+          if (user) localStorage.removeItem(LS + "-avatar-" + user.id);
+        } catch {}
         setUser(null);
         setIsRecovery(false);
         setRole(null);
         setCouple(null);
+        setProfile(null);
+        setPartnerProfile(null);
+        setAvatarUrl(null);
+        setPartnerAvatarUrl(null);
         setMemories([]);
         setNotes([]);
         setTimeline([]);
@@ -637,14 +773,101 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setWishlist([]);
         return {};
       },
+      refreshProfiles: async () => {
+        if (isSupabaseConfigured && sb && user) {
+          await loadProfiles(sb, user.id, couple?.id ?? null);
+        }
+      },
+      uploadAvatar: async (blob: Blob) => {
+        if (!user) return { error: "Not signed in." };
+        if (!blob.type.startsWith("image/")) return { error: "That image type isn't supported." };
+        if (blob.size > 8 * 1024 * 1024) return { error: "That photo is too large to process." };
+        setAvatarBusy(true);
+        setAvatarError("");
+        try {
+          if (isSupabaseConfigured && sb) {
+            const path = `${user.id}/avatar.jpg`;
+            const { error: upErr } = await sb.storage.from("profile-photos").upload(path, blob, {
+              contentType: "image/jpeg",
+              upsert: true,
+            });
+            if (upErr) throw new Error(upErr.message);
+            const { error: dbErr } = await sb.from("profiles").upsert(
+              { id: user.id, email: user.email, display_name: user.displayName, avatar_path: path },
+              { onConflict: "id" }
+            );
+            if (dbErr) throw new Error(dbErr.message);
+            setProfile((p) => (p ? { ...p, avatar_path: path } : p));
+            setAvatarUrl(await signedAvatarUrl(sb, path));
+            // also refresh partner view if needed (partner sees new avatar via their own fetch, but update local)
+            return {};
+          } else {
+            const { fileToDataUrl } = await import("../lib/image");
+            const url = await fileToDataUrl(blob);
+            try {
+              localStorage.setItem(LS + "-avatar-" + user.id, url);
+            } catch {}
+            setAvatarUrl(url);
+            setProfile((p) =>
+              p ? { ...p, avatar_path: "demo", avatar_url: url } : { id: user.id, email: user.email, display_name: user.displayName, avatar_path: "demo", avatar_url: url }
+            );
+            return {};
+          }
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : "Couldn't save the photo. Please try again.";
+          setAvatarError(msg);
+          return { error: msg.includes("not supported") ? msg : "Couldn't save the photo. Please try again." };
+        } finally {
+          setAvatarBusy(false);
+        }
+      },
+      removeAvatar: async () => {
+        if (!user) return { error: "Not signed in." };
+        setAvatarBusy(true);
+        setAvatarError("");
+        try {
+          if (isSupabaseConfigured && sb) {
+            if (profile?.avatar_path) {
+              try {
+                await sb.storage.from("profile-photos").remove([profile.avatar_path]);
+              } catch {}
+            } else if (avatarUrl) {
+              // legacy avatar_url case — try to derive path
+              try {
+                await sb.storage.from("profile-photos").remove([`${user.id}/avatar.jpg`]);
+              } catch {}
+            }
+            const { error } = await sb.from("profiles").update({ avatar_path: null, avatar_url: null }).eq("id", user.id);
+            if (error) throw new Error(error.message);
+            setAvatarUrl(null);
+            setProfile((p) => (p ? { ...p, avatar_path: null, avatar_url: null } : p));
+            return {};
+          } else {
+            try {
+              localStorage.removeItem(LS + "-avatar-" + user.id);
+            } catch {}
+            setAvatarUrl(null);
+            setProfile((p) => (p ? { ...p, avatar_path: null, avatar_url: null } : p));
+            return {};
+          }
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : "Couldn't remove the photo. Please try again.";
+          setAvatarError(msg);
+          return { error: msg };
+        } finally {
+          setAvatarBusy(false);
+        }
+      },
       signOut: async () => {
         if (isSupabaseConfigured && sb) {
           await sb.auth.signOut();
-          // onAuthStateChange clears state too; clear here as well so the
-          // UI never flashes the previous couple's data.
           setUser(null);
           setRole(null);
           setCouple(null);
+          setProfile(null);
+          setPartnerProfile(null);
+          setAvatarUrl(null);
+          setPartnerAvatarUrl(null);
           setMemories([]);
           setNotes([]);
           setTimeline([]);
@@ -652,12 +875,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
           setWishlist([]);
           return;
         }
-        // keep local data cached for next demo login, but clear session
         const saved = loadLocal();
         if (saved) {
           localStorage.setItem(LS, JSON.stringify({ ...saved, user: null }));
         }
         setUser(null);
+        setProfile(null);
+        setPartnerProfile(null);
+        setAvatarUrl(null);
+        setPartnerAvatarUrl(null);
       },
       resetPassword: async (email) => {
         if (isSupabaseConfigured && sb) {
@@ -676,12 +902,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (isSupabaseConfigured && sb) {
           const { error } = await sb.auth.updateUser({ password });
           if (error) return { error: friendlyAuthError(error.message) };
-          // Drop the recovery session so the user proves the new password
-          // with a fresh login. SIGNED_OUT also clears isRecovery.
           await sb.auth.signOut();
           setUser(null);
           setIsRecovery(false);
+          setRole(null);
           setCouple(null);
+          setProfile(null);
+          setPartnerProfile(null);
+          setAvatarUrl(null);
+          setPartnerAvatarUrl(null);
           setMemories([]);
           setNotes([]);
           setTimeline([]);
@@ -970,7 +1199,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setWishlist((prev) => prev.filter((w) => w.id !== id));
       },
     };
-  }, [user, couple, memories, notes, timeline, places, wishlist, authLoading, dataLoading, isRecovery, role]);
+  }, [user, profile, partnerProfile, avatarUrl, partnerAvatarUrl, couple, memories, notes, timeline, places, wishlist, authLoading, dataLoading, isRecovery, role, profileLoading, avatarBusy, avatarError]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

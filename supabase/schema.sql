@@ -266,5 +266,53 @@ create policy "own legal acceptance" on public.legal_acceptances
   with check (user_id = auth.uid());
 create index if not exists legal_acceptances_user_idx on public.legal_acceptances(user_id);
 
+-- Profile photos: personal, private, per-user (extends profiles)
+alter table public.profiles add column if not exists avatar_path text;
+alter table public.profiles add column if not exists updated_at timestamptz default now();
+create or replace function public.touch_updated_at()
+returns trigger language plpgsql as $$
+begin new.updated_at = now(); return new; end; $$;
+drop trigger if exists trg_profiles_updated_at on public.profiles;
+create trigger trg_profiles_updated_at before update on public.profiles
+  for each row execute function public.touch_updated_at();
+create or replace function public.is_same_couple(target uuid)
+returns boolean language sql stable security definer set search_path = '' as $$
+  select exists (
+    select 1 from public.couple_members m1
+    join public.couple_members m2 on m1.couple_id = m2.couple_id
+    where m1.user_id = auth.uid() and m2.user_id = target
+  );
+$$;
+revoke all on function public.is_same_couple(uuid) from public;
+revoke all on function public.is_same_couple(uuid) from anon;
+grant execute on function public.is_same_couple(uuid) to authenticated;
+drop policy if exists "own profile all" on public.profiles;
+drop policy if exists "own profile" on public.profiles;
+create policy "own profile all" on public.profiles for all using (id = auth.uid()) with check (id = auth.uid());
+drop policy if exists "partner can read profile" on public.profiles;
+create policy "partner can read profile" on public.profiles for select using (public.is_same_couple(id));
+create or replace function public.handle_new_user()
+returns trigger language plpgsql security definer set search_path = '' as $$
+begin
+  insert into public.profiles (id, email, display_name, avatar_path)
+  values (new.id, new.email, coalesce(new.raw_user_meta_data->>'display_name', split_part(new.email, '@', 1)), null)
+  on conflict (id) do nothing;
+  return new;
+end; $$;
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created after insert on auth.users for each row execute function public.handle_new_user();
+insert into public.profiles (id, email, display_name)
+select id, email, coalesce(raw_user_meta_data->>'display_name', split_part(email, '@', 1)) from auth.users
+on conflict (id) do nothing;
+insert into storage.buckets (id, name, public) values ('profile-photos', 'profile-photos', false) on conflict (id) do nothing;
+drop policy if exists "profile-photos own insert" on storage.objects;
+create policy "profile-photos own insert" on storage.objects for insert to authenticated with check (bucket_id = 'profile-photos' and (storage.foldername(name))[1]::uuid = auth.uid());
+drop policy if exists "profile-photos own update" on storage.objects;
+create policy "profile-photos own update" on storage.objects for update to authenticated using (bucket_id = 'profile-photos' and (storage.foldername(name))[1]::uuid = auth.uid()) with check (bucket_id = 'profile-photos' and (storage.foldername(name))[1]::uuid = auth.uid());
+drop policy if exists "profile-photos own delete" on storage.objects;
+create policy "profile-photos own delete" on storage.objects for delete to authenticated using (bucket_id = 'profile-photos' and (storage.foldername(name))[1]::uuid = auth.uid());
+drop policy if exists "profile-photos partner read" on storage.objects;
+create policy "profile-photos partner read" on storage.objects for select to authenticated using (bucket_id = 'profile-photos' and ((storage.foldername(name))[1]::uuid = auth.uid() or public.is_same_couple((storage.foldername(name))[1]::uuid)));
+
 -- realtime: enable publication
 -- alter publication supabase_realtime add table public.memories, public.notes, public.wishlist_items, public.timeline_events, public.places;

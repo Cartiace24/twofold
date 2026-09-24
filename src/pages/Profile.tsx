@@ -1,16 +1,40 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { LogOut, Trash2, LogOutIcon, UserX } from "lucide-react";
+import { Camera, ImagePlus, Loader2, LogOut, Trash2, LogOutIcon, UserX } from "lucide-react";
 import { useApp } from "../store/AppContext";
 import { daysTogether, formatDate, formatDays, todayISO } from "../lib/format";
 import { Button, Field, Input } from "../components/ui/primitives";
 import { InviteCodeCard } from "../components/InviteCode";
-import { SectionHeading } from "../components/scrapbook/bits";
+import { SectionHeading, Tape } from "../components/scrapbook/bits";
+import { Avatar } from "../components/profile/Avatar";
+import { CropSheet } from "../components/profile/CropSheet";
 import { filesToDataUrls } from "../lib/image";
 
 export default function Profile() {
-  const { couple, updateCouple, regenerateCode, signOut, leaveCouple, deleteCouple, deleteAccount, isOwner, memories, notes, places, usingDemo } =
-    useApp();
+  const {
+    couple,
+    updateCouple,
+    regenerateCode,
+    signOut,
+    leaveCouple,
+    deleteCouple,
+    deleteAccount,
+    isOwner,
+    memories,
+    notes,
+    places,
+    usingDemo,
+    profile,
+    partnerProfile,
+    avatarUrl,
+    partnerAvatarUrl,
+    avatarBusy,
+    avatarError,
+    uploadAvatar,
+    removeAvatar,
+    profileLoading,
+    user,
+  } = useApp();
   const [name, setName] = useState(couple?.name ?? "");
   const [since, setSince] = useState(couple?.together_since ?? todayISO());
   const [desc, setDesc] = useState(couple?.description ?? "");
@@ -21,13 +45,13 @@ export default function Profile() {
   const [dangerErr, setDangerErr] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteTyped, setDeleteTyped] = useState("");
+  const [cropSrc, setCropSrc] = useState<string | null>(null);
+  const [cropOpen, setCropOpen] = useState(false);
   const accentTimer = useRef<number | null>(null);
   useEffect(() => () => {
     if (accentTimer.current) window.clearTimeout(accentTimer.current);
   }, []);
 
-  // The color picker fires onChange for every tick while dragging — debounce
-  // so we save once the user settles instead of hammering Supabase.
   const changeAccent = (value: string) => {
     setAccent(value);
     if (accentTimer.current) window.clearTimeout(accentTimer.current);
@@ -52,13 +76,51 @@ export default function Profile() {
     if (urls[0]) await updateCouple({ cover_url: urls[0] });
   };
 
+  const handlePick = (files: FileList | null) => {
+    const f = files?.[0];
+    if (!f) return;
+    if (!f.type.startsWith("image/")) {
+      // handled in uploadAvatar, but give quick feedback
+      return;
+    }
+    if (f.size > 10 * 1024 * 1024) {
+      return;
+    }
+    const url = URL.createObjectURL(f);
+    setCropSrc(url);
+    setCropOpen(true);
+  };
+
+  const handleCropSave = async (blob: Blob) => {
+    setCropOpen(false);
+    const r = await uploadAvatar(blob);
+    if (cropSrc) {
+      URL.revokeObjectURL(cropSrc);
+      setCropSrc(null);
+    }
+    if (r.error) {
+      // error already in avatarError
+    }
+  };
+
+  const handleCropCancel = () => {
+    if (cropSrc) URL.revokeObjectURL(cropSrc);
+    setCropSrc(null);
+    setCropOpen(false);
+  };
+
+  const handleRemove = async () => {
+    if (!confirm("Remove your profile photo?")) return;
+    await removeAvatar();
+  };
+
   return (
     <div className="px-4 sm:px-6 max-w-2xl mx-auto pb-16">
       <div className="pt-5 sm:pt-8"><SectionHeading kicker="the inside cover" title="This book belongs to us" note="written in pencil, naturally" /></div>
 
       <div className="relative mt-2 border border-[#E5DAC6] bg-[#FFFDF7] overflow-hidden">
         <div className="h-[150px] sm:h-[190px] bg-[#EDE6D6] relative">
-          {couple.cover_url && <img src={couple.cover_url} alt="" className="w-full h-full object-cover" />}
+          {couple.cover_url && <img src={couple.cover_url} alt="Couple cover" className="w-full h-full object-cover" />}
           <label className="absolute bottom-2 right-2 cursor-pointer bg-[#2B2622]/85 text-white text-[12.5px] font-bold px-3 py-2 rounded-[3px]">
             change cover
             <input type="file" accept="image/*" className="hidden" onChange={(e) => pickCover(e.target.files)} />
@@ -83,6 +145,77 @@ export default function Profile() {
               <p className="font-hand text-[20px] text-[#B6AA99] mt-1">write a line about you two below ♡</p>
             )}
             <p className="mt-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-[#8A7F72]">handle with love · est. {formatDate(couple.together_since)}</p>
+          </div>
+
+          {/* personal profile pictures — you & partner */}
+          <div className="mt-5">
+            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#8B5E3C] mb-2">who’s who — your faces ♡</p>
+            {profileLoading ? (
+              <div className="grid sm:grid-cols-2 gap-3">
+                <div className="paper-card p-4 animate-pulse h-[140px]" />
+                <div className="paper-card p-4 animate-pulse h-[140px]" />
+              </div>
+            ) : (
+              <div className="grid sm:grid-cols-2 gap-3">
+                {/* you */}
+                <div className="paper-card p-4 relative rotate-[-0.4deg]">
+                  <Tape className="left-1/2 -translate-x-1/2 -top-[8px] w-[56px] rotate-[-2deg]" />
+                  <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#7D2E3B]">You — {user?.displayName ?? "You"}</p>
+                  <div className="mt-2 flex gap-3 items-start">
+                    <Avatar src={avatarUrl} name={profile?.display_name || user?.displayName} size={84} frame="square" />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-display font-semibold text-[15px] leading-tight truncate">{profile?.display_name || user?.displayName}</p>
+                      <p className="text-[11px] text-[#8A7F72] truncate">{user?.email}</p>
+                      <p className="font-hand text-[16px] text-[#8A7F72] leading-none mt-1">your profile</p>
+                      <div className="mt-2 flex flex-col gap-1.5">
+                        <label className="touch inline-flex items-center justify-center gap-1.5 bg-[#2B2622] text-[#FAF6EF] px-3 py-2 rounded-[3px] text-[12px] font-bold cursor-pointer active:scale-[0.98]">
+                          {avatarBusy ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
+                          {avatarBusy ? "Uploading…" : avatarUrl ? "Change photo" : "Choose photo"}
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp"
+                            className="hidden"
+                            onChange={(e) => handlePick(e.target.files)}
+                          />
+                        </label>
+                        {/* take photo via camera — capture attribute */}
+                        <label className="touch inline-flex items-center justify-center gap-1.5 bg-[#FFFDF7] border border-[#E5DAC6] px-3 py-1.5 rounded-[3px] text-[11px] font-bold cursor-pointer">
+                          <ImagePlus size={12} /> Take photo
+                          <input type="file" accept="image/*" capture="user" className="hidden" onChange={(e) => handlePick(e.target.files)} />
+                        </label>
+                        {avatarUrl && (
+                          <button
+                            type="button"
+                            onClick={handleRemove}
+                            disabled={avatarBusy}
+                            className="touch text-[11px] underline text-[#8A7F72] font-bold text-left"
+                            aria-label="Remove profile photo"
+                          >
+                            Remove photo
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  {avatarError && <p className="mt-2 text-[12px] font-semibold text-[#7D2E3B]" role="alert">{avatarError}</p>}
+                  {avatarBusy && <p className="mt-1 font-hand text-[18px] text-[#8A7F72]">Uploading photo…</p>}
+                </div>
+
+                {/* partner */}
+                <div className="paper-card p-4 relative rotate-[0.5deg] bg-[#F9E8E6] border-[#E8B4B8]/50">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#6B7F5E]">Your partner</p>
+                  <div className="mt-2 flex gap-3 items-center">
+                    <Avatar src={partnerAvatarUrl} name={partnerProfile?.display_name} size={84} frame="polaroid" />
+                    <div className="min-w-0">
+                      <p className="font-display font-semibold text-[15px] leading-tight truncate">{partnerProfile?.display_name ?? "—"}</p>
+                      <p className="text-[12px] text-[#8A7F72] truncate">{partnerProfile?.email ?? (partnerProfile ? "" : "not yet joined")}</p>
+                      <p className="font-hand text-[16px] text-[#8A7F72] leading-none mt-1">{partnerProfile ? "with you ♡" : "awaiting"}</p>
+                    </div>
+                  </div>
+                  {!partnerProfile && <p className="mt-2 text-[12px] text-[#8A7F72]">Share your invite code to see them here.</p>}
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="mt-5 flex flex-col gap-4">
@@ -219,6 +352,8 @@ export default function Profile() {
         <Link to="/guidelines" className="underline text-[#7D2E3B] font-bold">Guidelines</Link>
         <span className="mx-1 block mt-1 font-hand text-[16px]">Two Lives, one story — handle with love.</span>
       </div>
+
+      <CropSheet open={cropOpen} src={cropSrc ?? ""} onCancel={handleCropCancel} onSave={handleCropSave} />
     </div>
   );
 }
