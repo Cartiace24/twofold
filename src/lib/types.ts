@@ -103,6 +103,40 @@ export interface WishlistItem {
   created_at: string;
 }
 
+export type PhotoboothSessionStatus =
+  | "waiting"
+  | "joined"
+  | "ready"
+  | "countdown"
+  | "complete"
+  | "closed"
+  | "expired";
+
+/** Ephemeral long-distance photobooth session, owned by a couple.
+ *  Temp captures are compressed data URLs (same convention as
+ *  memory_photos.url) — never video, never permanent. */
+export interface PhotoboothSession {
+  id: ID;
+  couple_id: ID;
+  created_by: string | null;
+  creator_name: string;
+  partner_id: string | null;
+  partner_name: string;
+  status: PhotoboothSessionStatus;
+  preset_id: string;
+  creator_ready: boolean;
+  partner_ready: boolean;
+  creator_photo: string | null;
+  partner_photo: string | null;
+  capture_at: string | null;
+  joined_at: string | null;
+  creator_seen_at: string | null;
+  partner_seen_at: string | null;
+  created_at: string;
+  updated_at: string;
+  expires_at: string;
+}
+
 export const WISHLIST_CATEGORIES: WishlistCategory[] = [
   "Places",
   "Food",

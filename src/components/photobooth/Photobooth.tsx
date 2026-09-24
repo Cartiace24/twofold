@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Aperture, ImagePlus, Loader2, RefreshCw, SwitchCamera, X, Zap, ZapOff } from "lucide-react";
+import { Aperture, ImagePlus, Loader2, RefreshCw, SwitchCamera, Users, X, Zap, ZapOff } from "lucide-react";
 import { useApp } from "../../store/AppContext";
 import { todayISO } from "../../lib/format";
 import { Button, Sheet } from "../ui/primitives";
@@ -21,6 +21,7 @@ import {
   thumbDataUrl,
 } from "./render";
 import { useCamera, type Facing } from "./useCamera";
+import TogetherBooth from "./TogetherBooth";
 
 function wait(ms: number): Promise<void> {
   return new Promise((res) => setTimeout(res, ms));
@@ -66,6 +67,7 @@ export default function Photobooth() {
   const { addMemory, user } = useApp();
   const nav = useNavigate();
 
+  const [section, setSection] = useState<"solo" | "together">("solo");
   const [facing, setFacing] = useState<Facing>("environment");
   const [presetId, setPresetId] = useState("softfilm");
   const [intensity, setIntensity] = useState(100);
@@ -342,6 +344,10 @@ export default function Photobooth() {
   const fadeOpacity = (adjust.fade / 100) * 0.16;
   const grainOpacity = 0.04 + (adjust.grain / 100) * 0.08;
 
+  if (section === "together") {
+    return <TogetherBooth onBack={() => setSection("solo")} />;
+  }
+
   return (
     <div className="min-h-dvh flex flex-col bg-[#FAF6EF] max-w-xl mx-auto">
       {/* top bar */}
@@ -355,7 +361,14 @@ export default function Photobooth() {
             <Aperture size={17} className="text-[#7D2E3B]" /> say cheese ♡
           </p>
         </div>
-        <div className="w-12" aria-hidden />
+        <button
+          onClick={() => setSection("together")}
+          aria-label="Take a photo together"
+          title="Take a photo together"
+          className="touch w-12 h-12 grid place-items-center text-[#7D2E3B]"
+        >
+          <Users size={24} />
+        </button>
       </header>
 
       {stage === "camera" ? (
@@ -541,6 +554,11 @@ export default function Photobooth() {
                 : timer > 0
                   ? `timer ${timer}s — get ready…`
                   : "tap the big button ♡"}
+            </p>
+            <p className="text-center mb-1">
+              <button onClick={() => setSection("together")} className="text-[13px] font-bold text-[#7D2E3B] underline">
+                apart right now? take a photo together →
+              </button>
             </p>
             {mode === "strip" && shotThumbs.length > 0 && !camBusy && (
               <div className="flex justify-center gap-4 mb-1 text-[13.5px] font-bold">

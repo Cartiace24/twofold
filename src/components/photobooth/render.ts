@@ -486,6 +486,54 @@ export function composeStripCanvas(photos: HTMLCanvasElement[]): HTMLCanvasEleme
   return canvas;
 }
 
+/** Combine two graded long-distance captures into one vertical
+ *  photobooth print: creator on top, partner below (role-based order so
+ *  both devices compose the identical strip), each with a name caption,
+ *  finished with the standard twofold footer. */
+export async function composeTogetherStripCanvas(
+  creator: HTMLCanvasElement,
+  partner: HTMLCanvasElement,
+  creatorName: string,
+  partnerName: string
+): Promise<HTMLCanvasElement> {
+  const W = 900;
+  const pad = 42;
+  const gap = 22;
+  const captionH = 58;
+  const photoW = W - pad * 2;
+  const photoH = Math.round((photoW * 3) / 4);
+  const footH = 190;
+  const H = pad + (photoH + captionH) * 2 + gap + footH + pad;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = PAPER;
+  ctx.fillRect(0, 0, W, H);
+
+  const caveat = await loadFont("Caveat", 44);
+  let y = pad;
+  const pairs: Array<[HTMLCanvasElement, string]> = [
+    [creator, creatorName],
+    [partner, partnerName],
+  ];
+  for (const [photo, name] of pairs) {
+    const { sx, sy, w, h } = coverSrc(photo.width, photo.height, photoW, photoH);
+    ctx.drawImage(photo, sx, sy, w, h, pad, y, photoW, photoH);
+    ctx.strokeStyle = "rgba(43,38,34,0.25)";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(pad + 1, y + 1, photoW - 2, photoH - 2);
+    ctx.fillStyle = "#8A7F72";
+    ctx.font = `500 40px ${caveat}`;
+    ctx.textBaseline = "middle";
+    ctx.fillText(name ? `${name} ♡` : "♡", pad + 4, y + photoH + captionH / 2);
+    y += photoH + captionH + gap;
+  }
+  await stampStripFooter(canvas);
+  return canvas;
+}
+
 export async function stampStripFooter(canvas: HTMLCanvasElement): Promise<void> {
   const ctx = canvas.getContext("2d")!;
   const W = canvas.width;

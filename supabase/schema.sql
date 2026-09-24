@@ -122,6 +122,32 @@ create table if not exists public.wishlist_items (
   created_at timestamptz default now()
 );
 
+-- long-distance photobooth sessions (temporary, couple-scoped; see
+-- supabase/migration_photobooth_sessions.sql for design notes)
+create table if not exists public.photobooth_sessions (
+  id uuid primary key default gen_random_uuid(),
+  couple_id uuid not null references public.couples(id) on delete cascade,
+  created_by uuid references auth.users(id) on delete set null,
+  creator_name text not null default '',
+  partner_id uuid references auth.users(id) on delete set null,
+  partner_name text not null default '',
+  status text not null default 'waiting'
+    check (status in ('waiting', 'joined', 'ready', 'countdown', 'complete', 'closed', 'expired')),
+  preset_id text not null default 'softfilm',
+  creator_ready boolean not null default false,
+  partner_ready boolean not null default false,
+  creator_photo text,
+  partner_photo text,
+  capture_at timestamptz,
+  joined_at timestamptz,
+  creator_seen_at timestamptz default now(),
+  partner_seen_at timestamptz,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  expires_at timestamptz not null default now() + interval '30 minutes'
+);
+create index if not exists photobooth_sessions_couple_idx on public.photobooth_sessions(couple_id, created_at desc);
+
 -- helpers: RLS helpers must be SECURITY DEFINER so policies can evaluate
 -- without recursion; they are intentionally executable by authenticated
 -- (required for RLS) but never by anon. Hardened with empty search_path.
@@ -151,6 +177,7 @@ alter table public.notes enable row level security;
 alter table public.timeline_events enable row level security;
 alter table public.places enable row level security;
 alter table public.wishlist_items enable row level security;
+alter table public.photobooth_sessions enable row level security;
 
 -- profiles: own only
 drop policy if exists "own profile" on public.profiles;
@@ -205,6 +232,10 @@ create policy "couple rw places" on public.places for all using (public.is_coupl
 
 drop policy if exists "couple rw wishlist" on public.wishlist_items;
 create policy "couple rw wishlist" on public.wishlist_items for all using (public.is_couple_member(couple_id)) with check (public.is_couple_member(couple_id));
+
+-- long-distance photobooth sessions: members of the owning couple only
+drop policy if exists "couple rw booth sessions" on public.photobooth_sessions;
+create policy "couple rw booth sessions" on public.photobooth_sessions for all using (public.is_couple_member(couple_id)) with check (public.is_couple_member(couple_id));
 
 -- Invite-code lookup for joining. A partner who is NOT yet a member cannot
 -- SELECT from couples (see policies above), so the app resolves the code
@@ -279,6 +310,9 @@ begin new.updated_at = now(); return new; end; $$;
 drop trigger if exists trg_profiles_updated_at on public.profiles;
 create trigger trg_profiles_updated_at before update on public.profiles
   for each row execute function public.touch_updated_at();
+drop trigger if exists trg_photobooth_sessions_updated_at on public.photobooth_sessions;
+create trigger trg_photobooth_sessions_updated_at before update on public.photobooth_sessions
+  for each row execute function public.touch_updated_at();
 create or replace function public.is_same_couple(target uuid)
 returns boolean language sql stable security definer set search_path = '' as $$
   select exists (
@@ -319,4 +353,4 @@ drop policy if exists "profile-photos partner read" on storage.objects;
 create policy "profile-photos partner read" on storage.objects for select to authenticated using (bucket_id = 'profile-photos' and ((storage.foldername(name))[1]::uuid = auth.uid() or public.is_same_couple((storage.foldername(name))[1]::uuid)));
 
 -- realtime: enable publication (couples included so partner theme/appearance updates arrive live)
--- alter publication supabase_realtime add table public.memories, public.notes, public.wishlist_items, public.timeline_events, public.places, public.couples;
+-- alter publication supabase_realtime add table public.memories, public.notes, public.wishlist_items, public.timeline_events, public.places, public.couples, public.photobooth_sessions;

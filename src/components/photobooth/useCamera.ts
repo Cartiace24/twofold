@@ -5,8 +5,10 @@ export type CamStatus = "starting" | "ready" | "denied" | "missing" | "insecure"
 
 /** Owns the getUserMedia lifecycle: starts on mount / facing change, stops
  *  every track on cleanup so the camera never runs in the background.
- *  Robust for mobile Safari / Android Chrome. */
-export function useCamera(facing: Facing) {
+ *  Robust for mobile Safari / Android Chrome. Pass enabled=false to keep
+ *  the camera off until the user actually needs it (no early permission
+ *  prompt); the default true preserves the existing booth behavior. */
+export function useCamera(facing: Facing, enabled = true) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const genRef = useRef(0);
@@ -173,11 +175,15 @@ export function useCamera(facing: Facing) {
   );
 
   useEffect(() => {
+    if (!enabled) {
+      stop();
+      return;
+    }
     void start(facing);
     return () => {
       stop();
     };
-  }, [facing, start, stop]);
+  }, [facing, start, stop, enabled]);
 
   // Heartbeat: ensure tracks are stopped even if the component unmounts
   // without the normal cleanup (e.g. hard navigation). The `gen` bump on
