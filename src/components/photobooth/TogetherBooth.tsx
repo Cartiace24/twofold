@@ -61,6 +61,12 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
   const resultBlobRef = useRef<Blob | null>(null);
   const leaveRef = useRef(t.leaveQuietly);
   leaveRef.current = t.leaveQuietly;
+  // doCapture is memoized but needs the latest session/upload — refs avoid
+  // a stale closure that would silently swallow the capture.
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
+  const uploadPhotoRef = useRef(t.uploadPhoto);
+  uploadPhotoRef.current = t.uploadPhoto;
 
   const ownReady = role === "creator" ? session?.creator_ready : session?.partner_ready;
   const otherReady = role === "creator" ? session?.partner_ready : session?.creator_ready;
@@ -112,8 +118,11 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
 
   const doCapture = useCallback(async () => {
     const video = videoRef.current;
-    const s = t.session;
-    if (!video || !s) return;
+    const s = sessionRef.current;
+    if (!video || !s) {
+      setPageError("Couldn't grab that frame — try retake?");
+      return;
+    }
     setPageError("");
     setFlashOn(true);
     await wait(280);
@@ -129,7 +138,7 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
         r.onerror = rej;
         r.readAsDataURL(blob);
       });
-      await t.uploadPhoto(url);
+      await uploadPhotoRef.current(url);
     } catch {
       setPageError("Couldn't grab that frame — try retake?");
     } finally {
