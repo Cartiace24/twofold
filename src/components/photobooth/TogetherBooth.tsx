@@ -132,12 +132,14 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
     if (cameraOk) pv.refreshLocal();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cameraOk, facing]);
-  // Session names first (fresh writes use configured names), profile
-  // fallback, never an email — stale email rows resolve to the fallback.
+  // Live profile data first (fresh on every login), stored session names
+  // second, neutral fallback last — never an email. A stale prefix baked
+  // into the row at join time is immediately covered once the profile
+  // (re)loads, with no new session needed.
   const otherName =
     role === "creator"
-      ? safeDisplayName(session?.partner_name, partnerLabel)
-      : safeDisplayName(session?.creator_name, "your person");
+      ? safeDisplayName(partnerProfile?.display_name, safeDisplayName(session?.partner_name, "your person"))
+      : safeDisplayName(partnerProfile?.display_name, safeDisplayName(session?.creator_name, "your person"));
 
   const capturedRef = useRef<string | null>(null);
   const composingRef = useRef(false);

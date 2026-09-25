@@ -491,6 +491,22 @@ export function useTogetherSession(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sb, coupleId, !!session, chanNonce]);
 
+  // Heal a stale own-name (e.g. joined before the profile finished loading,
+  // so the row kept an email prefix): once the configured name is known,
+  // write it into my own column. Never touches the partner's column, never
+  // fires when names already match.
+  useEffect(() => {
+    if (!sb || !session || !role || !userId || !myName) return;
+    if (!["waiting", "joined", "ready", "countdown", "retake_requested"].includes(session.status))
+      return;
+    const col = role === "creator" ? "creator_name" : "partner_name";
+    if ((session[col] ?? "") === myName) return;
+    void sb
+      .from("photobooth_sessions")
+      .update({ [col]: myName.slice(0, 40) })
+      .eq("id", session.id);
+  }, [sb, session, role, userId, myName]);
+
   // ---- derived transitions (idempotent; exactly one client wins) ----
   // Retried on an interval while the condition holds: if the first write
   // is lost (flaky mobile data), the session must not wedge in "joined".
