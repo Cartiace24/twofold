@@ -142,6 +142,8 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
   sessionRef.current = session;
   const uploadPhotoRef = useRef(t.uploadPhoto);
   uploadPhotoRef.current = t.uploadPhoto;
+  const refreshLocalRef = useRef(pv.refreshLocal);
+  refreshLocalRef.current = pv.refreshLocal;
   const [retakeNotice, setRetakeNotice] = useState<string | null>(null);
   const handledRetakeRef = useRef<string | null>(null);
 
@@ -344,7 +346,12 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
       }
       return null;
     });
-    void reattachRef.current();
+    // Reattach, then deterministically point the PC sender at the current
+    // local track (replaceTrack, no renegotiation). The facing-watcher
+    // effect also does this, but the swap must not depend on a status flap.
+    void reattachRef.current().finally(() => {
+      refreshLocalRef.current();
+    });
     const byOther = !!session.retake_by && session.retake_by !== myName;
     setRetakeNotice(byOther ? `${session.retake_by} wants to retake ♡` : "Retaking together ♡");
     // eslint-disable-next-line react-hooks/exhaustive-deps
