@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Camera, ChevronRight, ImagePlus, Loader2, LogOut, Palette, Trash2, LogOutIcon, UserX } from "lucide-react";
 import { useApp } from "../store/AppContext";
+import { getSupabase, isSupabaseConfigured } from "../lib/supabase";
 import { daysTogether, formatDate, formatDays, todayISO } from "../lib/format";
 import { Button, Field, Input } from "../components/ui/primitives";
 import { InviteCodeCard } from "../components/InviteCode";
@@ -33,6 +34,7 @@ export default function Profile() {
     uploadAvatar,
     removeAvatar,
     profileLoading,
+    refreshProfiles,
     user,
   } = useApp();
   const [name, setName] = useState(couple?.name ?? "");
@@ -47,6 +49,57 @@ export default function Profile() {
   const [deleteTyped, setDeleteTyped] = useState("");
   const [cropSrc, setCropSrc] = useState<string | null>(null);
   const [cropOpen, setCropOpen] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
+  const [nameBusy, setNameBusy] = useState(false);
+  const [nameError, setNameError] = useState("");
+  const [nameSaved, setNameSaved] = useState("");
+
+  const startNameEdit = () => {
+    setNameDraft(profile?.display_name || user?.displayName || "");
+    setNameError("");
+    setNameSaved("");
+    setEditingName(true);
+  };
+
+  const saveName = async () => {
+    const clean = nameDraft.trim().slice(0, 40);
+    if (!clean) {
+      setNameError("Give yourself a name — a word or two is plenty.");
+      return;
+    }
+    if (clean.includes("@")) {
+      setNameError("Use a display name, not your email.");
+      return;
+    }
+    if (!user) return;
+    setNameBusy(true);
+    setNameError("");
+    try {
+      if (isSupabaseConfigured) {
+        const sb = getSupabase();
+        if (!sb) throw new Error("Not connected — try again?");
+        const { error } = await sb
+          .from("profiles")
+          .upsert({ id: user.id, email: user.email, display_name: clean }, { onConflict: "id" });
+        if (error) throw new Error(error.message);
+        // Best-effort: keep auth metadata in sync for future sessions.
+        try {
+          await sb.auth.updateUser({ data: { display_name: clean } });
+        } catch {
+          /* profiles row is the source of truth; metadata is a bonus */
+        }
+      }
+      await refreshProfiles();
+      setEditingName(false);
+      setNameSaved("Saved ♡");
+      window.setTimeout(() => setNameSaved(""), 2500);
+    } catch (e) {
+      setNameError(e instanceof Error ? e.message : "Couldn't save — try again?");
+    } finally {
+      setNameBusy(false);
+    }
+  };
   const accentTimer = useRef<number | null>(null);
   useEffect(() => () => {
     if (accentTimer.current) window.clearTimeout(accentTimer.current);
@@ -168,9 +221,54 @@ export default function Profile() {
                   <div className="mt-2 flex gap-3 items-start">
                     <Avatar src={avatarUrl} name={profile?.display_name || user?.displayName} size={84} frame="square" />
                     <div className="flex-1 min-w-0">
-                      <p className="font-display font-semibold text-[15px] leading-tight truncate">{profile?.display_name || user?.displayName}</p>
-                      <p className="text-[11px] text-[#8A7F72] truncate">{user?.email}</p>
-                      <p className="font-hand text-[16px] text-[#8A7F72] leading-none mt-1">your profile</p>
+                      {!editingName ? (
+                        <>
+                          <p className="font-display font-semibold text-[15px] leading-tight truncate">{profile?.display_name || user?.displayName}</p>
+                          <p className="text-[11px] text-[#8A7F72] truncate">{user?.email}</p>
+                          <div className="mt-1 flex items-center gap-2">
+                            <p className="font-hand text-[16px] text-[#8A7F72] leading-none">your profile</p>
+                            {!usingDemo && (
+                              <button
+                                onClick={startNameEdit}
+                                aria-label="Edit display name"
+                                className="touch text-[12px] font-bold text-[#7D2E3B] underline px-2"
+                              >
+                                Edit name
+                              </button>
+                            )}
+                          </div>
+                          {nameSaved && <p className="font-hand text-[17px] text-[#6B7F5E]">{nameSaved}</p>}
+                        </>
+                      ) : (
+                        <div className="flex flex-col gap-1.5">
+                          <Field label="Display name" hint="shown across Twofold, never your email">
+                            <Input
+                              value={nameDraft}
+                              onChange={(e) => setNameDraft(e.target.value.slice(0, 40))}
+                              placeholder="e.g. Hope"
+                              maxLength={40}
+                              autoFocus
+                            />
+                          </Field>
+                          {nameError && <p className="text-[12px] font-semibold text-[#7D2E3B]" role="alert">{nameError}</p>}
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => setEditingName(false)}
+                              disabled={nameBusy}
+                              className="touch flex-1 bg-[#FFFDF7] border border-[#E5DAC6] rounded-[3px] font-bold text-[13px] text-[#4A423B] disabled:opacity-60"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={saveName}
+                              disabled={nameBusy}
+                              className="touch flex-1 bg-[#2B2622] text-[#FAF6EF] rounded-[3px] font-bold text-[13px] disabled:opacity-60"
+                            >
+                              {nameBusy ? "Saving…" : "Save"}
+                            </button>
+                          </div>
+                        </div>
+                      )}
                       <div className="mt-2 flex flex-col gap-1.5">
                         <label className="touch inline-flex items-center justify-center gap-1.5 bg-[#2B2622] text-[#FAF6EF] px-3 py-2 rounded-[3px] text-[12px] font-bold cursor-pointer active:scale-[0.98]">
                           {avatarBusy ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
