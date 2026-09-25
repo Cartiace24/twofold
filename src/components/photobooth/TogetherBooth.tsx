@@ -52,7 +52,15 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
   const [finalDataUrl, setFinalDataUrl] = useState<string | null>(null);
 
   // Camera stays off in the lobby — it starts once a session exists.
-  const { videoRef, status: camStatus, detail: camDetail, restart: camRestart } = useCamera(facing, !!session);
+  const {
+    videoRef,
+    status: camStatus,
+    detail: camDetail,
+    restart: camRestart,
+    reattachCamera,
+  } = useCamera(facing, !!session);
+  const reattachRef = useRef(reattachCamera);
+  reattachRef.current = reattachCamera;
   const mirror = facing === "user";
   const cameraOk = camStatus === "ready";
 
@@ -67,6 +75,8 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
   sessionRef.current = session;
   const uploadPhotoRef = useRef(t.uploadPhoto);
   uploadPhotoRef.current = t.uploadPhoto;
+  const [retakeNotice, setRetakeNotice] = useState<string | null>(null);
+  const handledRetakeRef = useRef<string | null>(null);
 
   const ownReady = role === "creator" ? session?.creator_ready : session?.partner_ready;
   const otherReady = role === "creator" ? session?.partner_ready : session?.creator_ready;
@@ -167,10 +177,79 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
   useEffect(() => {
     if (!session || !role || ownReady || resultUrl) return;
     if (!cameraOk) return;
-    if (!["joined", "ready"].includes(session.status)) return;
+    if (!["joined", "ready", "retake_requested"].includes(session.status)) return;
     void t.markReady();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.id, session?.status, role, ownReady, cameraOk, resultUrl]);
+
+  // Synchronized retake: an explicit retake_requested (newer than anything
+  // handled) clears my captured preview, returns me to the camera, and
+  // re-attaches the stream — no button press needed on this side.
+  // mergeRow() is untouched: the wipe here is intentional, not stale data.
+  useEffect(() => {
+    if (!session || session.status !== "retake_requested" || !session.retake_at) return;
+    if (handledRetakeRef.current === session.retake_at) return;
+    handledRetakeRef.current = session.retake_at;
+    if (typeof console !== "undefined") {
+      // eslint-disable-next-line no-console
+      console.info("[LongDistance] RETAKE received", { by: session.retake_by });
+      // eslint-disable-next-line no-console
+      console.info("[LongDistance] returning to camera");
+    }
+    if (resultUrl) URL.revokeObjectURL(resultUrl);
+    setResultUrl(null);
+    resultBlobRef.current = null;
+    capturedRef.current = null;
+    composingRef.current = false;
+    setCount(null);
+    setCapState("idle");
+    setWaitLong(false);
+    setPageError("");
+    setLocalPreviewUrl((prev) => {
+      if (prev) {
+        if (typeof console !== "undefined") {
+          // eslint-disable-next-line no-console
+          console.info("[LongDistance] capturedPhoto CLEARED", { reason: "retake requested" });
+        }
+        try {
+          URL.revokeObjectURL(prev);
+        } catch {
+          /* already gone */
+        }
+      }
+      return null;
+    });
+    void reattachRef.current();
+    const byOther = !!session.retake_by && session.retake_by !== myName;
+    setRetakeNotice(byOther ? `${session.retake_by} wants to retake ♡` : "Retaking together ♡");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.status, session?.retake_at]);
+
+  // Retake notice is transient: gone once we're ready again.
+  useEffect(() => {
+    if (session?.status === "ready") setRetakeNotice(null);
+  }, [session?.status]);
+  useEffect(() => {
+    if (!retakeNotice) return;
+    const id = window.setTimeout(() => setRetakeNotice(null), 8000);
+    return () => window.clearTimeout(id);
+  }, [retakeNotice]);
+
+  // Readiness diagnostics.
+  useEffect(() => {
+    if (otherReady && typeof console !== "undefined") {
+      // eslint-disable-next-line no-console
+      console.info("[LongDistance] partner camera ready");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [otherReady]);
+  useEffect(() => {
+    if (bothReady && typeof console !== "undefined") {
+      // eslint-disable-next-line no-console
+      console.info("[LongDistance] both cameras ready");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bothReady]);
 
   const [capState, setCapState] = useState<"idle" | "capturing" | "uploading" | "done" | "failed">("idle");
   const [waitLong, setWaitLong] = useState(false);
@@ -183,7 +262,7 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
   useEffect(() => {
     if (typeof console !== "undefined") {
       // eslint-disable-next-line no-console
-      console.info("[LongDistance] booth build together-v5-noclear");
+      console.info("[LongDistance] booth build together-v6-retake");
     }
   }, []);
 
@@ -329,9 +408,11 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
     return () => window.clearInterval(id);
   }, [session?.status, session?.capture_at, doCapture]);
 
-  // Both photos in → compose the shared strip locally.
+  // Both photos in → compose the shared strip locally. Gated on an
+  // active round so a stale row can never resurrect an old strip.
   useEffect(() => {
-    if (!session?.creator_photo || !session?.partner_photo || resultUrl || composingRef.current) return;
+    if (!session || !["countdown", "complete"].includes(session.status)) return;
+    if (!session.creator_photo || !session.partner_photo || resultUrl || composingRef.current) return;
     composingRef.current = true;
     void (async () => {
       try {
@@ -383,10 +464,6 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
   }, [resultUrl]);
 
   const handleRetake = () => {
-    if (typeof console !== "undefined") {
-      // eslint-disable-next-line no-console
-      console.info("[LongDistance] capturedPhoto CLEARED", { reason: "retake" });
-    }
     if (resultUrl) URL.revokeObjectURL(resultUrl);
     if (localPreviewUrl) URL.revokeObjectURL(localPreviewUrl);
     setLocalPreviewUrl(null);
@@ -398,7 +475,9 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
     setCapState("idle");
     setWaitLong(false);
     setPageError("");
-    void t.retake();
+    // Coordinated via the session — the retake_requested echo drives the
+    // actual return-to-camera (same path as the partner's side).
+    void t.requestRetake();
   };
 
   // If my photo is up but my person's isn't arriving, say so and offer a
@@ -764,6 +843,9 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
 
       {/* session state */}
       <div className="border-t border-[#E5DAC6] bg-[#FAF6EF] px-4 pt-3 pb-[calc(1rem+env(safe-area-inset-bottom))] overflow-y-auto no-scrollbar">
+        {retakeNotice && (
+          <p className="font-hand text-[21px] text-[#8A7F72] text-center mb-1">{retakeNotice}</p>
+        )}
         {pageError && <p className="text-[14px] font-semibold text-[#7D2E3B] text-center mb-2">{pageError}</p>}
         {t.error && <p className="text-[14px] font-semibold text-[#7D2E3B] text-center mb-2">{t.error}</p>}
         {!t.linkOk && (

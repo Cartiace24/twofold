@@ -12,13 +12,23 @@ export function useCamera(facing: Facing, enabled = true) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const genRef = useRef(0);
+  const facingRef = useRef(facing);
+  facingRef.current = facing;
   const [status, setStatus] = useState<CamStatus>("starting");
   const [detail, setDetail] = useState("");
 
   const stop = useCallback(() => {
     genRef.current += 1;
+    if (typeof console !== "undefined") {
+      // eslint-disable-next-line no-console
+      console.info("[LongDistance] camera cleanup", { stoppingStream: !!streamRef.current });
+    }
     streamRef.current?.getTracks().forEach((t) => {
       try {
+        if (typeof console !== "undefined") {
+          // eslint-disable-next-line no-console
+          console.info("[LongDistance] stopping stream", { kind: t.kind, readyState: t.readyState });
+        }
         t.stop();
       } catch {
         /* already stopped */
@@ -194,5 +204,70 @@ export function useCamera(facing: Facing, enabled = true) {
     };
   }, [stop]);
 
-  return { videoRef, status, detail, stop, restart: () => start(facing) };
+  /** Re-attach the camera to the (possibly newly mounted) video element.
+   *  Used when returning to the camera view without unmounting the hook:
+   *  reuses the still-live stream when possible, otherwise restarts via
+   *  getUserMedia. Never marks ready without verified video dimensions. */
+  const reattachCamera = useCallback(async (): Promise<boolean> => {
+    const el = videoRef.current;
+    const stream = streamRef.current;
+    const live = !!stream && stream.getVideoTracks().some((t) => t.readyState === "live");
+    if (typeof console !== "undefined") {
+      // eslint-disable-next-line no-console
+      console.info("[LongDistance] restarting camera", {
+        hasElement: !!el,
+        hasLiveStream: live,
+      });
+    }
+    if (el && live && stream) {
+      const gen = genRef.current;
+      try {
+        if (el.srcObject !== stream) el.srcObject = stream;
+        if (typeof console !== "undefined") {
+          // eslint-disable-next-line no-console
+          console.info("[LongDistance] camera stream assigned");
+        }
+        try {
+          await el.play();
+        } catch {
+          /* autoplay can need a gesture on some iOS */
+        }
+        await new Promise<void>((res) => {
+          if (el.readyState >= 2 && el.videoWidth > 0 && el.videoHeight > 0) return res();
+          let done = false;
+          const finish = () => {
+            if (done) return;
+            done = true;
+            el.removeEventListener("loadedmetadata", finish);
+            el.removeEventListener("canplay", finish);
+            res();
+          };
+          el.addEventListener("loadedmetadata", finish, { once: true });
+          el.addEventListener("canplay", finish, { once: true } as AddEventListenerOptions);
+          setTimeout(finish, 1500);
+        });
+        if (gen !== genRef.current) return false;
+        if (el.videoWidth > 0 && el.videoHeight > 0) {
+          setStatus("ready");
+          if (typeof console !== "undefined") {
+            // eslint-disable-next-line no-console
+            console.info("[LongDistance] video ready", {
+              videoWidth: el.videoWidth,
+              videoHeight: el.videoHeight,
+            });
+            // eslint-disable-next-line no-console
+            console.info("[LongDistance] camera ready");
+          }
+          return true;
+        }
+      } catch {
+        /* fall through to a full restart */
+      }
+    }
+    stop();
+    await start(facingRef.current);
+    return true;
+  }, [start, stop]);
+
+  return { videoRef, status, detail, stop, restart: () => start(facing), reattachCamera };
 }

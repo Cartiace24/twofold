@@ -109,6 +109,7 @@ export type PhotoboothSessionStatus =
   | "ready"
   | "countdown"
   | "complete"
+  | "retake_requested"
   | "closed"
   | "expired";
 
@@ -129,6 +130,8 @@ export interface PhotoboothSession {
   creator_photo: string | null;
   partner_photo: string | null;
   capture_at: string | null;
+  retake_at: string | null;
+  retake_by: string;
   joined_at: string | null;
   creator_seen_at: string | null;
   partner_seen_at: string | null;

@@ -193,6 +193,9 @@ export function useTogetherSession(
     async (dataUrl: string) => {
       const s = sessionRef.current;
       if (!sb || !s || !role) return false;
+      // A retake (or end) mid-upload discards the round: never write a
+      // photo into a session that already moved on.
+      if (s.status !== "countdown") return false;
       const patch =
         role === "creator"
           ? { creator_photo: dataUrl, creator_seen_at: nowISO() }
@@ -217,18 +220,32 @@ export function useTogetherSession(
     [sb, role]
   );
 
-  const retake = useCallback(async () => {
+  /** Explicit synchronized retake: clears both photos + ready flags and
+   *  moves the shared session to retake_requested. Both clients process
+   *  that state (clear previews, return to camera, re-verify readiness)
+   *  and then promote back to ready — no local-only resets. */
+  const requestRetake = useCallback(async () => {
     const s = sessionRef.current;
-    if (!sb || !s) return;
+    if (!sb || !s || !userId) return;
+    const at = nowISO();
     const patch = {
+      status: "retake_requested" as const,
       creator_photo: null,
       partner_photo: null,
       capture_at: null,
-      status: "ready" as const,
+      creator_ready: false,
+      partner_ready: false,
+      retake_at: at,
+      retake_by: myName.slice(0, 40),
     };
+    if (typeof console !== "undefined") {
+      // eslint-disable-next-line no-console
+      console.info("[LongDistance] RETAKE requested", { by: patch.retake_by });
+    }
     setSession((prev) => (prev ? { ...prev, ...patch } : prev));
-    await sb.from("photobooth_sessions").update(patch).eq("id", s.id);
-  }, [sb]);
+    const { error } = await sb.from("photobooth_sessions").update(patch).eq("id", s.id);
+    if (error) setError("Couldn't send the retake — try again?");
+  }, [sb, userId, myName]);
 
   const endSession = useCallback(async () => {
     const s = sessionRef.current;
@@ -323,14 +340,18 @@ export function useTogetherSession(
 
   useEffect(() => {
     if (!sb || !session) return;
-    if (!(session.creator_ready && session.partner_ready && session.status === "joined")) return;
+    if (
+      !(session.creator_ready && session.partner_ready) ||
+      !["joined", "retake_requested"].includes(session.status)
+    )
+      return;
     let cancelled = false;
     const promote = async () => {
       const { error } = await sb
         .from("photobooth_sessions")
         .update({ status: "ready" })
         .eq("id", session.id)
-        .eq("status", "joined");
+        .in("status", ["joined", "retake_requested"]);
       if (!cancelled && error) setError(`Sync hiccup: ${error.message}`);
     };
     void promote();
@@ -385,6 +406,7 @@ export function useTogetherSession(
             s.creator_ready,
             s.partner_ready,
             s.capture_at,
+            s.retake_at,
             s.creator_photo?.length ?? 0,
             s.partner_photo?.length ?? 0,
             s.creator_seen_at,
@@ -446,7 +468,7 @@ export function useTogetherSession(
     markReady,
     startCountdown,
     uploadPhoto,
-    retake,
+    requestRetake,
     endSession,
     leaveQuietly,
     retryLink,
