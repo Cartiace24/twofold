@@ -273,23 +273,40 @@ export function usePartnerVideo(args: {
       })();
     };
     pc.ontrack = (e) => {
-      if (cancelled || gen !== genRef.current) return;
+      // Fired-log comes first so a silent guard-drop (A) is distinguishable
+      // from streams-empty (B) and from set-but-cleared (D).
+      pvlog("ontrack fired", {
+        eventTrackKind: e.track?.kind ?? null,
+        eventTrackId: e.track?.id ?? null,
+        eventTrackState: e.track?.readyState ?? null,
+        streamsLength: e.streams?.length ?? 0,
+        streamId: e.streams?.[0]?.id ?? null,
+      });
+      if (cancelled || gen !== genRef.current) {
+        pvlog("ontrack ignored", {
+          reason: cancelled ? "effect cancelled" : "stale generation",
+          gen,
+          currentGen: genRef.current,
+        });
+        return;
+      }
       const [s] = e.streams;
+      if (!s) {
+        pvlog("ontrack no stream, skipping state");
+        return;
+      }
       pvlog("remote track received", {
-        streamId: s?.id ?? null,
-        videoTracks: s?.getVideoTracks().map((tr) => ({
+        streamId: s.id,
+        streamTrackCount: s.getTracks().length,
+        videoTracks: s.getVideoTracks().map((tr) => ({
           kind: tr.kind,
           trackId: tr.id,
           readyState: tr.readyState,
-        })) ?? [],
-        eventTrackKind: e.track?.kind ?? null,
-        eventTrackState: e.track?.readyState ?? null,
+        })),
       });
-      if (s) {
-        setPartnerStream(s);
-        setPvStatus("connected");
-        pvlog("remote stream state updated", { streamId: s.id });
-      }
+      setPartnerStream(s);
+      setPvStatus("connected");
+      pvlog("remote stream state updated", { intendedStreamId: s.id });
       diagPc("after ontrack");
     };
     pc.onsignalingstatechange = () => {
@@ -346,7 +363,10 @@ export function usePartnerVideo(args: {
     return () => {
       cancelled = true;
       window.clearTimeout(timeout);
-      pvlog("cleanup");
+      pvlog("cleanup", {
+        hadActivePartnerStream: !!partnerStreamRef.current,
+        clearedStreamId: partnerStreamRef.current?.id ?? null,
+      });
       try {
         if (chRef.current) void sb.removeChannel(chRef.current);
       } catch {
