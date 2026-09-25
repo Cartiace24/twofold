@@ -109,6 +109,7 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.id, role, cameraOk, pv.partnerStream, pv.pvStatus, pv.pcDiag]);
+
   // Camera flip (or late camera start) swaps the local track in place —
   // no renegotiation, connection stays up.
   useEffect(() => {
@@ -148,6 +149,35 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
         : pv.pvStatus === "unavailable"
           ? "Partner camera unavailable"
           : "waiting for your person…";
+  // UI-Diag: exact render-condition inputs, mirrored from the JSX below.
+  useEffect(() => {
+    if (typeof console === "undefined") return;
+    if (!session) return;
+    const pel = partnerVideoRef.current;
+    // eslint-disable-next-line no-console
+    console.info("[LongDistance][WebRTC][UI-Diag]", {
+      peerUserId,
+      peerDisplayName: otherName,
+      partnerStreamExists: !!pv.partnerStream,
+      partnerStreamId: pv.partnerStream?.id ?? null,
+      partnerStreamTrackCount: pv.partnerStream?.getVideoTracks().length ?? 0,
+      remoteVideoElementExists: !!pel,
+      remoteVideoSrcObjectExists: !!pel?.srcObject,
+      remoteVideoReadyState: pel?.readyState ?? -1,
+      remoteVideoWidth: pel?.videoWidth ?? 0,
+      remoteVideoHeight: pel?.videoHeight ?? 0,
+      connectionState: pv.pcDiag.connection,
+      iceConnectionState: pv.pcDiag.ice,
+    });
+    // eslint-disable-next-line no-console
+    console.info("[LongDistance][WebRTC][UI-Diag] partner tile render", {
+      peerUserId,
+      partnerStreamExists: !!pv.partnerStream,
+      showingWaitingState: !!peerUserId && !pv.partnerStream,
+      showingPartnerVideo: !!peerUserId && !!pv.partnerStream,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.id, peerUserId, otherName, pv.partnerStream, pv.pvStatus, pv.pcDiag]);
 
   // Leave quietly when navigating away mid-session.
   useEffect(() => {
