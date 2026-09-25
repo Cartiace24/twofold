@@ -151,17 +151,79 @@ export function useTogetherSession(
     setInvites((prev) => prev.filter((s) => s.id !== id));
   }, []);
 
-  const markReady = useCallback(async () => {
+  const markReady = useCallback(async (): Promise<boolean> => {
     const s = sessionRef.current;
-    if (!sb || !s || !role) return;
+    if (!sb || !s || !role || !userId) return false;
+    // Role decides the column — creator reports creator_ready, partner
+    // reports partner_ready, never both from one client.
+    const column = role === "creator" ? "creator_ready" : "partner_ready";
     const patch =
       role === "creator"
         ? { creator_ready: true, creator_seen_at: nowISO() }
         : { partner_ready: true, partner_seen_at: nowISO() };
+    if (typeof console !== "undefined") {
+      // eslint-disable-next-line no-console
+      console.info("[LongDistance] reporting local camera ready");
+      // eslint-disable-next-line no-console
+      console.info("[LongDistance] ready payload", { ...patch, column, role });
+      // eslint-disable-next-line no-console
+      console.info("[LongDistance] ready update started", {
+        sessionId: s.id,
+        userId,
+        coupleId,
+        status: s.status,
+      });
+    }
     setSession((prev) => (prev ? { ...prev, ...patch } : prev));
-    const { error } = await sb.from("photobooth_sessions").update(patch).eq("id", s.id);
-    if (error) setError(`Couldn't report camera readiness — check connection? (${error.message})`);
-  }, [sb, role]);
+    // .select() verifies the row actually exists: a zero-row update
+    // (deleted/expired session) otherwise resolves with no error.
+    const { data, error } = await sb
+      .from("photobooth_sessions")
+      .update(patch)
+      .eq("id", s.id)
+      .select("id");
+    if (typeof console !== "undefined") {
+      // eslint-disable-next-line no-console
+      console.info("[LongDistance] ready update succeeded", {
+        ok: !error,
+        rows: data?.length ?? 0,
+        error: error
+          ? { message: error.message, code: error.code, details: error.details, hint: error.hint }
+          : null,
+      });
+      // eslint-disable-next-line no-console
+      console.info("[LongDistance] ready update returned row", { rows: data?.length ?? 0 });
+    }
+    if (error) {
+      if (typeof console !== "undefined") {
+        // eslint-disable-next-line no-console
+        console.info("[LongDistance] ready update FAILED", {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint,
+        });
+      }
+      setError(`Couldn't report camera readiness — ${error.message} Try again?`);
+      return false;
+    }
+    if (!data || data.length === 0) {
+      // The session row is gone server-side (ended/expired/deleted) while
+      // this client still holds it — staying in camera view can never
+      // converge, so say so explicitly instead of wedging silently.
+      if (typeof console !== "undefined") {
+        // eslint-disable-next-line no-console
+        console.info("[LongDistance] ready update FAILED", { message: "zero rows updated" });
+      }
+      setError("This session no longer exists — ask your person to start a new one?");
+      return false;
+    }
+    if (typeof console !== "undefined") {
+      // eslint-disable-next-line no-console
+      console.info("[LongDistance] local ready confirmed from server", { column });
+    }
+    return true;
+  }, [sb, role, userId, coupleId]);
 
   const startCountdown = useCallback(async () => {
     const s = sessionRef.current;
@@ -450,7 +512,13 @@ export function useTogetherSession(
           .select("*")
           .eq("id", session.id)
           .maybeSingle();
-        if (!data) return;
+        if (!data) {
+          if (typeof console !== "undefined") {
+            // eslint-disable-next-line no-console
+            console.info("[LongDistance] session missing on server", { sessionId: session.id });
+          }
+          return;
+        }
         const server = data as PhotoboothSession;
         const cur = sessionRef.current;
         if (!cur || cur.id !== server.id) return;
