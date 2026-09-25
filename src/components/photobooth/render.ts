@@ -368,7 +368,7 @@ function applyGlow(ctx: CanvasRenderingContext2D, w: number, h: number, amount: 
 /* frames + strip chrome (rendered into the export)                    */
 /* ------------------------------------------------------------------ */
 
-function coverSrc(sw: number, sh: number, dw: number, dh: number, biasY = 0.5) {
+export function coverSrc(sw: number, sh: number, dw: number, dh: number, biasY = 0.5) {
   const target = dw / dh;
   const src = sw / sh;
   let sx = 0;
@@ -535,6 +535,273 @@ export async function composeTogetherStripCanvas(
   }
   await stampStripFooter(canvas);
   return canvas;
+}
+
+/* ------------------------------------------------------------------ */
+/* together frame: post-capture two-photo compositions                 */
+/* ------------------------------------------------------------------ */
+
+export type TogetherLayout = "side" | "stack" | "polaroid";
+export type TogetherFrameStyle = "paper" | "film" | "polaroid";
+
+/** Per-photo crop over the cover window: s>=1 zoom, fx/fy pan in [-1,1]
+ *  as fractions of the available overflow. The editor preview derives its
+ *  CSS from frameWindow(), so preview and export match exactly. */
+export interface FrameTransform {
+  s: number;
+  fx: number;
+  fy: number;
+}
+export const FRAME_TRANSFORM_DEFAULT: FrameTransform = { s: 1, fx: 0, fy: 0 };
+
+export function frameWindow(
+  sw: number,
+  sh: number,
+  dw: number,
+  dh: number,
+  t: FrameTransform
+): { sx: number; sy: number; w: number; h: number } {
+  const base = coverSrc(sw, sh, dw, dh);
+  const s = Math.min(3.5, Math.max(1, t.s || 1));
+  const fx = Math.max(-1, Math.min(1, t.fx || 0));
+  const fy = Math.max(-1, Math.min(1, t.fy || 0));
+  const w = base.w / s;
+  const h = base.h / s;
+  const maxOx = Math.max(0, (base.w - w) / 2);
+  const maxOy = Math.max(0, (base.h - h) / 2);
+  const cx = base.sx + base.w / 2 + fx * maxOx;
+  const cy = base.sy + base.h / 2 + fy * maxOy;
+  return {
+    sx: Math.min(Math.max(cx - w / 2, 0), Math.max(sw - w, 0)),
+    sy: Math.min(Math.max(cy - h / 2, 0), Math.max(sh - h, 0)),
+    w,
+    h,
+  };
+}
+
+const WINE = "#7D2E3B";
+const MUTED = "#8A7F72";
+
+function drawWindow(
+  ctx: CanvasRenderingContext2D,
+  photo: HTMLCanvasElement,
+  t: FrameTransform,
+  dx: number,
+  dy: number,
+  dw: number,
+  dh: number
+) {
+  const win = frameWindow(photo.width, photo.height, dw, dh, t);
+  ctx.drawImage(photo, win.sx, win.sy, win.w, win.h, dx, dy, dw, dh);
+  ctx.strokeStyle = "rgba(43,38,34,0.25)";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(dx + 1, dy + 1, dw - 2, dh - 2);
+}
+
+function footerHeight(caption: string, showDate: boolean, showMark: boolean): number {
+  let h = 30;
+  if (caption.trim()) h += 78;
+  if (showDate || showMark) h += 92;
+  return h;
+}
+
+async function drawFrameFooter(
+  ctx: CanvasRenderingContext2D,
+  W: number,
+  pad: number,
+  y: number,
+  opts: { caption: string; showDate: boolean; showMark: boolean; date?: Date }
+): Promise<number> {
+  const cap = opts.caption.trim().slice(0, 80);
+  if (cap) {
+    const caveat = await loadFont("Caveat", 46);
+    ctx.fillStyle = "#4A423B";
+    ctx.font = `500 46px ${caveat}`;
+    ctx.textBaseline = "middle";
+    ctx.textAlign = "center";
+    ctx.fillText(cap, W / 2, y + 38, W - pad * 2);
+    ctx.textAlign = "left";
+    y += 78;
+  }
+  if (opts.showMark || opts.showDate) {
+    const fraunces = await loadFont("Fraunces", 56);
+    ctx.textBaseline = "middle";
+    if (opts.showMark) {
+      ctx.fillStyle = INK;
+      ctx.font = `600 54px ${fraunces}`;
+      ctx.fillText("twofold ♡", pad, y + 42);
+    }
+    if (opts.showDate) {
+      ctx.textAlign = "right";
+      ctx.font = "700 30px ui-monospace, monospace";
+      ctx.fillStyle = WINE;
+      ctx.fillText(shortStamp(opts.date), W - pad, y + 42);
+      ctx.textAlign = "left";
+    }
+    y += 92;
+  }
+  return y + 30;
+}
+
+async function drawPhotoName(
+  ctx: CanvasRenderingContext2D,
+  name: string,
+  x: number,
+  y: number
+) {
+  if (!name.trim()) return;
+  const caveat = await loadFont("Caveat", 40);
+  ctx.fillStyle = MUTED;
+  ctx.font = `500 38px ${caveat}`;
+  ctx.textBaseline = "middle";
+  ctx.fillText(`${name.trim().slice(0, 24)} ♡`, x, y);
+}
+
+export interface TogetherFrameOpts {
+  layout: TogetherLayout;
+  /** Frame chrome for side/stack; polaroid layout has its fixed look. */
+  frame: TogetherFrameStyle;
+  photoA: HTMLCanvasElement;
+  photoB: HTMLCanvasElement;
+  transA: FrameTransform;
+  transB: FrameTransform;
+  nameA: string;
+  nameB: string;
+  showNames: boolean;
+  showDate: boolean;
+  showMark: boolean;
+  caption: string;
+  date?: Date;
+  maxLong?: number;
+}
+
+async function gridFrameCanvas(o: TogetherFrameOpts): Promise<HTMLCanvasElement> {
+  const side = o.layout === "side";
+  const W = side ? 1500 : 1200;
+  const pad = 48;
+  const gap = 24;
+  const cellW = side ? Math.round((W - pad * 2 - gap) / 2) : W - pad * 2;
+  const cellH = side ? Math.round((cellW * 4) / 3) : Math.round((cellW * 3) / 4);
+  const nameH = o.showNames ? 58 : 0;
+  const footH = footerHeight(o.caption, o.showDate, o.showMark);
+  const filmBar = o.frame === "film" ? 90 : 0;
+  const polaroidPad = o.frame === "polaroid" ? 40 : 0;
+  const blockH = side ? cellH + nameH : (cellH + nameH) * 2 + gap;
+  const H = filmBar + pad + polaroidPad + blockH + footH + pad + polaroidPad + filmBar;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = W + polaroidPad * 2;
+  canvas.height = H;
+  const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = PAPER;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  if (o.frame === "polaroid") {
+    ctx.strokeStyle = "rgba(43,38,34,0.35)";
+    ctx.lineWidth = 3;
+    ctx.strokeRect(14, filmBar + 14, canvas.width - 28, H - filmBar * 2 - 28);
+  }
+  if (o.frame === "film") {
+    sprockets(ctx, canvas.width, 0, filmBar);
+    sprockets(ctx, canvas.width, H - filmBar, filmBar);
+  }
+
+  const ox = pad + polaroidPad;
+  let oy = filmBar + pad + polaroidPad;
+  const cells = side
+    ? [
+        { x: ox, y: oy },
+        { x: ox + cellW + gap, y: oy },
+      ]
+    : [
+        { x: ox, y: oy },
+        { x: ox, y: oy + cellH + nameH + gap },
+      ];
+  const photos = [
+    { photo: o.photoA, t: o.transA, name: o.nameA },
+    { photo: o.photoB, t: o.transB, name: o.nameB },
+  ];
+  for (let i = 0; i < 2; i++) {
+    drawWindow(ctx, photos[i].photo, photos[i].t, cells[i].x, cells[i].y, cellW, cellH);
+    if (o.showNames) {
+      await drawPhotoName(ctx, photos[i].name, cells[i].x + 4, cells[i].y + cellH + nameH / 2);
+    }
+  }
+  await drawFrameFooter(ctx, canvas.width, ox, oy + blockH, {
+    caption: o.caption,
+    showDate: o.showDate,
+    showMark: o.showMark,
+    date: o.date,
+  });
+  return canvas;
+}
+
+async function polaroidFrameCanvas(o: TogetherFrameOpts): Promise<HTMLCanvasElement> {
+  const W = 1200;
+  const H = 1500;
+  const canvas = document.createElement("canvas");
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = PAPER;
+  ctx.fillRect(0, 0, W, H);
+
+  const dw = 620;
+  const dh = 465;
+  const bw = 26;
+  const foot = 104;
+  const cards = [
+    { photo: o.photoA, t: o.transA, name: o.nameA, cx: 555, cy: 450, rot: -4 },
+    { photo: o.photoB, t: o.transB, name: o.nameB, cx: 655, cy: 960, rot: 3.5 },
+  ];
+  for (const c of cards) {
+    const cw = dw + bw * 2;
+    const ch = dh + bw + foot;
+    ctx.save();
+    ctx.translate(c.cx, c.cy);
+    ctx.rotate((c.rot * Math.PI) / 180);
+    ctx.shadowColor = "rgba(43,38,34,0.28)";
+    ctx.shadowBlur = 18;
+    ctx.shadowOffsetY = 6;
+    ctx.fillStyle = "#FFFEFA";
+    ctx.fillRect(-cw / 2, -ch / 2, cw, ch);
+    ctx.shadowColor = "transparent";
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetY = 0;
+    drawWindow(ctx, c.photo, c.t, -dw / 2, -ch / 2 + bw, dw, dh);
+    if (o.showNames && c.name.trim()) {
+      const caveat = await loadFont("Caveat", 40);
+      ctx.fillStyle = MUTED;
+      ctx.font = `500 36px ${caveat}`;
+      ctx.textBaseline = "middle";
+      ctx.textAlign = "center";
+      ctx.fillText(c.name.trim().slice(0, 24), 0, ch / 2 - foot / 2);
+      ctx.textAlign = "left";
+    }
+    ctx.restore();
+  }
+  await drawFrameFooter(ctx, W, 48, 1300, {
+    caption: o.caption,
+    showDate: o.showDate,
+    showMark: o.showMark,
+    date: o.date,
+  });
+  return canvas;
+}
+
+/** Final Together Frame composition at print scale (long edge ≤ maxLong),
+ *  exported by the caller with canvasToJpeg. */
+export async function composeTogetherFrameCanvas(o: TogetherFrameOpts): Promise<HTMLCanvasElement> {
+  const full =
+    o.layout === "polaroid" ? await polaroidFrameCanvas(o) : await gridFrameCanvas(o);
+  const maxLong = o.maxLong ?? 1600;
+  const long = Math.max(full.width, full.height);
+  if (long <= maxLong) return full;
+  const s = maxLong / long;
+  const small = document.createElement("canvas");
+  small.width = Math.round(full.width * s);
+  small.height = Math.round(full.height * s);
+  small.getContext("2d")!.drawImage(full, 0, 0, small.width, small.height);
+  return small;
 }
 
 export async function stampStripFooter(canvas: HTMLCanvasElement): Promise<void> {

@@ -20,6 +20,7 @@ import {
 import { useCamera, type Facing } from "./useCamera";
 import { partnerStale, useTogetherSession } from "./useTogetherSession";
 import { usePartnerVideo } from "./usePartnerVideo";
+import TogetherFrameEditor from "./TogetherFrameEditor";
 
 function wait(ms: number): Promise<void> {
   return new Promise((res) => setTimeout(res, ms));
@@ -30,7 +31,7 @@ function wait(ms: number): Promise<void> {
  *  join → ready → shared capture_at countdown → each captures locally →
  *  both photos land in the row → each composes the same strip locally. */
 export default function TogetherBooth({ onBack }: { onBack: () => void }) {
-  const { user, couple, partnerProfile, addMemory } = useApp();
+  const { user, couple, partnerProfile, addMemory, memories, updateMemory } = useApp();
   const nav = useNavigate();
   const sb = getSupabase();
   const myName = user?.displayName ?? "You";
@@ -743,16 +744,35 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
     }
   };
 
+  const [resultTab, setResultTab] = useState<"strip" | "frame">("strip");
+  const [saveKind, setSaveKind] = useState<"strip" | "frame">("strip");
+  const [saveTarget, setSaveTarget] = useState<string>("new");
+
   const openSave = async () => {
     const blob = resultBlobRef.current;
     if (!blob) return;
     setSaveError("");
     try {
       setFinalDataUrl(await blobToFinalDataUrl(blob));
+      setSaveKind("strip");
+      setSaveTarget("new");
       setSaveView("choice");
       setShowSave(true);
     } catch {
       setSaveError("Couldn't get that photo ready — try retaking?");
+    }
+  };
+
+  const openFrameSave = async (blob: Blob) => {
+    setSaveError("");
+    try {
+      setFinalDataUrl(await blobToFinalDataUrl(blob));
+      setSaveKind("frame");
+      setSaveTarget("new");
+      setSaveView("choice");
+      setShowSave(true);
+    } catch {
+      setSaveError("Couldn't get that frame ready — try again?");
     }
   };
 
@@ -761,20 +781,38 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
     setSaveBusy(true);
     setSaveError("");
     try {
+      if (saveTarget !== "new") {
+        // Tuck the photo into an existing memory — originals stay intact.
+        const mem = memories.find((m) => m.id === saveTarget);
+        if (!mem) throw new Error("That memory is gone — pick another?");
+        await updateMemory(mem.id, {
+          photos: [
+            ...mem.photos.map((p) => ({ id: p.id, url: p.url, caption: p.caption ?? "", sort: p.sort })),
+            { id: `${Date.now()}-0`, url: finalDataUrl, caption: "", sort: mem.photos.length },
+          ],
+        });
+        setShowSave(false);
+        nav(`/memories/${mem.id}`);
+        return;
+      }
       const id = await addMemory({
-        title: "Photo together",
+        title: saveKind === "frame" ? "Together frame" : "Photo together",
         caption: "together, even from miles away ♡",
         date: todayISO(),
         location_label: "",
-        tags: ["photobooth", "together"],
+        tags: saveKind === "frame" ? ["photobooth", "together", "frame"] : ["photobooth", "together"],
         creator: myName,
         favorite: false,
         photos: [{ id: `${Date.now()}-0`, url: finalDataUrl, caption: "", sort: 0 }],
       });
       setShowSave(false);
       nav(`/memories/${id}`);
-    } catch {
-      setSaveError("Couldn't save — check connection and try again?");
+    } catch (e) {
+      setSaveError(
+        e instanceof Error && /gone|pick another/i.test(e.message)
+          ? e.message
+          : "Couldn't save — check connection and try again?"
+      );
     } finally {
       setSaveBusy(false);
     }
@@ -840,15 +878,49 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
   /* ---------- result ---------- */
 
   if (resultUrl) {
+    const framePhotos =
+      resultTab === "frame" && session?.creator_photo && session?.partner_photo
+        ? { a: session.creator_photo, b: session.partner_photo }
+        : null;
+    const frameMode = framePhotos !== null;
     return (
       <div className="min-h-dvh flex flex-col bg-[#FAF6EF] max-w-xl mx-auto">
-        <div className="flex-1 flex flex-col px-4 py-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] max-w-md w-full mx-auto">
+        <div className={`flex-1 flex flex-col px-4 py-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] w-full mx-auto ${frameMode ? "max-w-3xl" : "max-w-md"}`}>
           <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-[#8B5E3C] text-center">photo together</p>
           <h2 className="font-display text-[26px] font-semibold tracking-tight text-center">you're together, even from miles away ♡</h2>
-          <div className="relative mt-4 self-center max-w-full">
-            <Tape className="left-1/2 -translate-x-1/2 -top-[11px] rotate-[-4deg] z-10" />
-            <img src={resultUrl} alt="Finished together photo strip" className="block border border-[#E5DAC6] shadow-md max-h-[52dvh] w-auto mx-auto" />
+          <div className="mt-3 grid grid-cols-2 gap-2" role="group" aria-label="Result style">
+            <button
+              onClick={() => setResultTab("strip")}
+              aria-pressed={resultTab === "strip"}
+              className={`touch rounded-[3px] border-2 font-bold text-[14px] ${resultTab === "strip" ? "border-[#7D2E3B] bg-[#FFFDF7] text-[#7D2E3B]" : "border-[#E5DAC6] text-[#8A7F72]"}`}
+            >
+              Photobooth Strip
+            </button>
+            <button
+              onClick={() => setResultTab("frame")}
+              aria-pressed={resultTab === "frame"}
+              className={`touch rounded-[3px] border-2 font-bold text-[14px] ${resultTab === "frame" ? "border-[#7D2E3B] bg-[#FFFDF7] text-[#7D2E3B]" : "border-[#E5DAC6] text-[#8A7F72]"}`}
+            >
+              Together Frame
+            </button>
           </div>
+          {!frameMode ? (
+            <div className="relative mt-4 self-center max-w-full">
+              <Tape className="left-1/2 -translate-x-1/2 -top-[11px] rotate-[-4deg] z-10" />
+              <img src={resultUrl} alt="Finished together photo strip" className="block border border-[#E5DAC6] shadow-md max-h-[52dvh] w-auto mx-auto" />
+            </div>
+          ) : (
+            <div className="mt-4">
+              <TogetherFrameEditor
+                photoAUrl={framePhotos.a}
+                photoBUrl={framePhotos.b}
+                nameA={session?.creator_name || myName}
+                nameB={session?.partner_name || partnerLabel}
+                onExport={openFrameSave}
+                onBack={() => setResultTab("strip")}
+              />
+            </div>
+          )}
           {t.ended === "ended" && (
             <p className="mt-3 text-[13.5px] text-[#8A7F72] text-center">Your person left — your copy is safe above.</p>
           )}
@@ -864,12 +936,18 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
             ) : (
               <span aria-hidden />
             )}
-            <button
-              onClick={openSave}
-              className="touch inline-flex items-center justify-center gap-1.5 bg-[#7D2E3B] text-[#FFFDF7] rounded-[3px] font-bold text-[15px] col-span-2"
-            >
-              Save to Memories
-            </button>
+            {!frameMode ? (
+              <button
+                onClick={openSave}
+                className="touch inline-flex items-center justify-center gap-1.5 bg-[#7D2E3B] text-[#FFFDF7] rounded-[3px] font-bold text-[15px] col-span-2"
+              >
+                Save to Memories
+              </button>
+            ) : (
+              <span className="col-span-2 font-hand text-[18px] text-[#8A7F72] self-center text-center">
+                make the frame above to save it ♡
+              </span>
+            )}
           </div>
           <button onClick={handleDone} className="touch mt-2 text-[14px] font-bold text-[#8A7F72] underline">
             Done
@@ -898,13 +976,33 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
                 <div className="font-display font-semibold text-[16px]">Save to Memory</div>
                 <div className="text-[13px] text-[#6B7F5E]">add a title + note, keep it with your story</div>
               </button>
+              {memories.length > 0 && (
+                <label className="block">
+                  <span className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#8B5E3C]">Quick save into</span>
+                  <select
+                    value={saveTarget}
+                    onChange={(e) => setSaveTarget(e.target.value)}
+                    aria-label="Save into new or existing memory"
+                    className="touch mt-1 w-full bg-[#FFFDF7] border border-[#E5DAC6] rounded-[3px] px-3 text-[15px] text-[#2B2622]"
+                  >
+                    <option value="new">New memory page</option>
+                    {memories.slice(0, 20).map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.title || "Untitled"} · {m.date}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
               <button
                 onClick={savePhotoOnly}
                 disabled={saveBusy}
                 className="touch text-left bg-[#FFFDF7] border border-[#E5DAC6] p-4 rounded-[4px] rotate-[-0.4deg] active:scale-[0.98] disabled:opacity-60"
               >
                 <div className="font-display font-semibold text-[16px]">{saveBusy ? "Tucking it in…" : "Just save the photo"}</div>
-                <div className="text-[13px] text-[#8A7F72]">a quick together page, no words needed</div>
+                <div className="text-[13px] text-[#8A7F72]">
+                  {saveTarget === "new" ? "a quick together page, no words needed" : "tucked into that memory, originals untouched"}
+                </div>
               </button>
             </div>
           ) : finalDataUrl ? (
