@@ -177,16 +177,26 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
     }
     if (capturedRef.current === session.capture_at) return;
     setPageError("");
-    const target = new Date(session.capture_at).getTime();
+    const parsed = new Date(session.capture_at).getTime();
+    // Guard against a skewed local clock (or an unparseable timestamp):
+    // normally we fire at the shared moment; worst case we fire 25s after
+    // the countdown started rather than waiting forever.
+    const target = Number.isFinite(parsed) ? parsed : Date.now() + 3000;
+    const startedAt = Date.now();
+    const WATCHDOG_MS = 25_000;
+    const fire = () => {
+      window.clearInterval(id);
+      if (capturedRef.current !== session.capture_at) {
+        capturedRef.current = session.capture_at;
+        void doCapture();
+      }
+    };
     const id = window.setInterval(() => {
-      const remain = Math.ceil((target - Date.now()) / 1000);
+      const now = Date.now();
+      const remain = Math.ceil((target - now) / 1000);
       setCount(remain > 0 ? remain : 0);
-      if (target - Date.now() <= 0) {
-        window.clearInterval(id);
-        if (capturedRef.current !== session.capture_at) {
-          capturedRef.current = session.capture_at;
-          void doCapture();
-        }
+      if (target - now <= 0 || now - startedAt > WATCHDOG_MS) {
+        fire();
       }
     }, 200);
     return () => window.clearInterval(id);
