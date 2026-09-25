@@ -52,6 +52,8 @@ export function usePartnerVideo(args: {
   const [pcDiag, setPcDiag] = useState({ connection: "new", ice: "new", signaling: "stable" });
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
+  const partnerStreamRef = useRef<MediaStream | null>(null);
+  partnerStreamRef.current = partnerStream;
   const chRef = useRef<RealtimeChannel | null>(null);
   const genRef = useRef(0);
   const helloSeenRef = useRef(false);
@@ -62,6 +64,38 @@ export function usePartnerVideo(args: {
   localRef.current = getLocalStream;
 
   const retry = useCallback(() => setNonce((n) => n + 1), []);
+
+  /** Full peer-connection introspection for the A/B/C/D diagnosis. */
+  const diagPc = useCallback(
+    (tag: string) => {
+      const pc = pcRef.current;
+      if (!pc) {
+        pvlog(tag, { noPc: true });
+        return;
+      }
+      pvlog(tag, {
+        role: isInitiator ? "creator" : "partner",
+        peerUserId,
+      connectionState: pc.connectionState,
+      signalingState: pc.signalingState,
+      iceConnectionState: pc.iceConnectionState,
+      senderCount: pc.getSenders().length,
+      senders: pc.getSenders().map((s) => ({
+        kind: s.track?.kind ?? null,
+        trackId: s.track?.id ?? null,
+        readyState: s.track?.readyState ?? null,
+      })),
+      receiverCount: pc.getReceivers().length,
+      receivers: pc.getReceivers().map((r) => ({
+        kind: r.track?.kind ?? null,
+        trackId: r.track?.id ?? null,
+        readyState: r.track?.readyState ?? null,
+      })),
+      ontrackAttached: !!pc.ontrack,
+      partnerStreamInState: !!partnerStreamRef.current,
+      partnerStreamId: partnerStreamRef.current?.id ?? null,
+    });
+  }, [isInitiator, peerUserId]);
 
   /** Attach the current local video track (or swap it after a camera flip)
    *  without renegotiating the whole connection. */
@@ -75,7 +109,11 @@ export function usePartnerVideo(args: {
     if (!sender) {
       try {
         pc.addTrack(track, stream);
-        pvlog("local track added");
+        pvlog("local video sender added", {
+          kind: track.kind,
+          trackId: track.id,
+          readyState: track.readyState,
+        });
       } catch {
         /* pc is closing */
       }
@@ -140,6 +178,7 @@ export function usePartnerVideo(args: {
             offeredRef.current = true;
             send({ kind: "offer", sdp: { type: offer.type, sdp: offer.sdp ?? "" } });
             pvlog("offer created");
+            diagPc("after offer created");
           } catch {
             /* retry covers */
           }
@@ -152,12 +191,14 @@ export function usePartnerVideo(args: {
         pvlog("offer received");
         try {
           await pc.setRemoteDescription(msg.sdp);
+          diagPc("after offer applied");
           await flushIce();
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
           if (cancelled || gen !== genRef.current) return;
           send({ kind: "answer", sdp: { type: answer.type, sdp: answer.sdp ?? "" } });
           pvlog("answer created");
+          diagPc("after answer created");
         } catch {
           /* retry covers */
         }
@@ -169,6 +210,7 @@ export function usePartnerVideo(args: {
         try {
           await pc.setRemoteDescription(msg.sdp);
           await flushIce();
+          diagPc("after answer applied");
         } catch {
           /* ignore */
         }
@@ -195,11 +237,16 @@ export function usePartnerVideo(args: {
     local?.getVideoTracks().forEach((tr) => {
       try {
         pc!.addTrack(tr, local);
+        pvlog("local video sender added", {
+          kind: tr.kind,
+          trackId: tr.id,
+          readyState: tr.readyState,
+        });
       } catch {
         /* pc is closing */
       }
     });
-    if (local) pvlog("local track added");
+    diagPc("pc setup");
 
     pc.onicecandidate = (e) => {
       if (cancelled || gen !== genRef.current) return;
@@ -219,6 +266,7 @@ export function usePartnerVideo(args: {
           offeredRef.current = true;
           send({ kind: "offer", sdp: { type: offer.type, sdp: offer.sdp ?? "" } });
           pvlog("offer created");
+          diagPc("after offer created (renegotiation)");
         } catch {
           /* retry covers */
         }
@@ -227,11 +275,22 @@ export function usePartnerVideo(args: {
     pc.ontrack = (e) => {
       if (cancelled || gen !== genRef.current) return;
       const [s] = e.streams;
+      pvlog("remote track received", {
+        streamId: s?.id ?? null,
+        videoTracks: s?.getVideoTracks().map((tr) => ({
+          kind: tr.kind,
+          trackId: tr.id,
+          readyState: tr.readyState,
+        })) ?? [],
+        eventTrackKind: e.track?.kind ?? null,
+        eventTrackState: e.track?.readyState ?? null,
+      });
       if (s) {
         setPartnerStream(s);
         setPvStatus("connected");
-        pvlog("remote track received");
+        pvlog("remote stream state updated", { streamId: s.id });
       }
+      diagPc("after ontrack");
     };
     pc.onsignalingstatechange = () => {
       if (cancelled || gen !== genRef.current || !pc) return;
@@ -246,6 +305,7 @@ export function usePartnerVideo(args: {
       const st = pc.connectionState;
       setPcDiag((d) => ({ ...d, connection: st }));
       pvlog("connection state changed", { state: st });
+      diagPc("connection state");
       if (st === "connected") {
         autoRestartsRef.current = 0;
         window.clearTimeout(timeout);
