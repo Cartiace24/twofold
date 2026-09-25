@@ -196,6 +196,10 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
       // eslint-disable-next-line no-console
       console.info("[LongDistance] returning to camera");
     }
+    // Intentionally discard round photos locally (the explicit retake
+    // exception to mergeRow): otherwise stale round-1 photos would satisfy
+    // the complete-promotion during the next countdown and cancel it.
+    t.clearPhotosForRetake();
     if (resultUrl) URL.revokeObjectURL(resultUrl);
     setResultUrl(null);
     resultBlobRef.current = null;

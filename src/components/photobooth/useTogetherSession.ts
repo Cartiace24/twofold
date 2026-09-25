@@ -26,18 +26,51 @@ function nowISO(): string {
   return new Date().toISOString();
 }
 
-/** Merge a server row into local session state WITHOUT ever clearing a
- *  locally-known photo: within a round, photo columns are write-once
- *  (null → data). Only an explicit local retake/end nulls them. A blind
- *  full-row overwrite lets a stale echo (e.g. a heartbeat row committed
- *  before my upload lands) wipe my just-captured photo mid-upload. */
+/** Merge a server row into local session state with two protections:
+ *  1. Photos are write-once per round (null → data): a stale server null
+ *     never clears a locally-known photo. Only an explicit local retake
+ *     nulls them (see the retake_requested processing in TogetherBooth).
+ *  2. Capture-cycle ordering: capture_at identifies the cycle. A row from
+ *     an older cycle (e.g. a delayed round-1 `complete` echo arriving
+ *     during a round-2 `countdown`) must not move the active cycle
+ *     backwards — its status/capture_at are rejected, everything else
+ *     still merges. Compared as instants, not strings: the optimistic
+ *     write (`...Z`) and the server echo (`...+00:00`) can spell the same
+ *     instant differently, and a string compare would false-positive. */
 function mergeRow(prev: PhotoboothSession | null, server: PhotoboothSession): PhotoboothSession {
   if (!prev || prev.id !== server.id) return server;
-  return {
+  const merged: PhotoboothSession = {
     ...server,
     creator_photo: server.creator_photo ?? prev.creator_photo,
     partner_photo: server.partner_photo ?? prev.partner_photo,
   };
+  const curCap = prev.capture_at;
+  const inCap = server.capture_at;
+  if (curCap && inCap && curCap !== inCap) {
+    const curT = Date.parse(curCap);
+    const inT = Date.parse(inCap);
+    if (Number.isFinite(curT) && Number.isFinite(inT)) {
+      if (inT < curT) {
+        if (typeof console !== "undefined") {
+          // eslint-disable-next-line no-console
+          console.info("[LongDistance] stale session update ignored", {
+            incomingStatus: server.status,
+            incomingCaptureAt: inCap,
+            currentStatus: prev.status,
+            currentCaptureAt: curCap,
+            reason: "older capture cycle",
+          });
+        }
+        merged.status = prev.status;
+        merged.capture_at = prev.capture_at;
+      } else if (inT === curT) {
+        // Same instant, different spelling (optimistic vs server echo):
+        // keep the local spelling so downstream string guards don't flap.
+        merged.capture_at = prev.capture_at;
+      }
+    }
+  }
+  return merged;
 }
 
 /** Owns one long-distance photobooth session: create / join / ready /
@@ -282,6 +315,16 @@ export function useTogetherSession(
     },
     [sb, role]
   );
+
+  /** Explicit local photo clear for a confirmed retake: the ONE sanctioned
+   *  exception to mergeRow's photo protection. Without this, round-1
+   *  photos preserved locally would satisfy the complete-promotion during
+   *  the round-2 countdown and wedge the new cycle with a stale complete. */
+  const clearPhotosForRetake = useCallback(() => {
+    setSession((prev) =>
+      prev ? { ...prev, creator_photo: null, partner_photo: null } : prev
+    );
+  }, []);
 
   /** Explicit synchronized retake: clears both photos + ready flags and
    *  moves the shared session to retake_requested. Transactional from the
@@ -591,6 +634,7 @@ export function useTogetherSession(
     startCountdown,
     uploadPhoto,
     requestRetake,
+    clearPhotosForRetake,
     endSession,
     leaveQuietly,
     retryLink,
