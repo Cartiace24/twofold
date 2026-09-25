@@ -370,7 +370,7 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
       });
       if (typeof console !== "undefined") {
         // eslint-disable-next-line no-console
-        console.info("[LongDistance] CAPTURE SUCCESS");
+        console.info("[LongDistance] capture SUCCESS");
         // eslint-disable-next-line no-console
         console.info("[LongDistance] Local preview URL:", { ready: true });
         // eslint-disable-next-line no-console
@@ -397,7 +397,13 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
         console.info("[LongDistance] upload finished", { ok });
       }
       setCapState(ok ? "done" : "failed");
-    } catch {
+    } catch (e) {
+      if (typeof console !== "undefined") {
+        // eslint-disable-next-line no-console
+        console.info("[LongDistance] capture FAILED", {
+          message: e instanceof Error ? e.message : String(e),
+        });
+      }
       setCapState("failed");
       setPageError("Couldn't grab that frame — try retake?");
     } finally {
@@ -408,37 +414,101 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [videoRef, mirror]);
 
-  // Shared countdown: both devices count to session.capture_at on their own clocks.
+  // Shared countdown: both devices count to session.capture_at on their own
+  // clocks. Single authoritative owner per capture attempt, guarded by a
+  // generation token: only the current generation may tick, fire capture,
+  // or touch countdown state — a stale interval dies loudly, never silently.
+  const countdownTokenRef = useRef(0);
+  const localPreviewRef = useRef(localPreviewUrl);
+  localPreviewRef.current = localPreviewUrl;
   useEffect(() => {
     if (!session || session.status !== "countdown" || !session.capture_at) {
       if (!session?.capture_at) capturedRef.current = null;
       return;
     }
     if (capturedRef.current === session.capture_at) return;
+    const token = ++countdownTokenRef.current;
+    const statusAtStart = session.status;
+    const captureAt = session.capture_at;
+    if (typeof console !== "undefined") {
+      // eslint-disable-next-line no-console
+      console.info("[LongDistance] countdown START", {
+        token,
+        status: statusAtStart,
+        capture_at: captureAt,
+        bothReady,
+        cameraOk,
+        photosPresent: !!(session.creator_photo || session.partner_photo),
+        handledRetake: handledRetakeRef.current,
+      });
+    }
     setPageError("");
-    const parsed = new Date(session.capture_at).getTime();
+    const parsed = new Date(captureAt).getTime();
     // Guard against a skewed local clock (or an unparseable timestamp):
     // normally we fire at the shared moment; worst case we fire 25s after
     // the countdown started rather than waiting forever.
     const target = Number.isFinite(parsed) ? parsed : Date.now() + 3000;
     const startedAt = Date.now();
     const WATCHDOG_MS = 25_000;
-    const fire = () => {
+    const fire = (why: string) => {
+      if (token !== countdownTokenRef.current) {
+        if (typeof console !== "undefined") {
+          // eslint-disable-next-line no-console
+          console.info("[LongDistance] stale countdown ignored", { token, why });
+        }
+        return;
+      }
       window.clearInterval(id);
-      if (capturedRef.current !== session.capture_at) {
-        capturedRef.current = session.capture_at;
+      if (typeof console !== "undefined") {
+        // eslint-disable-next-line no-console
+        console.info("[LongDistance] countdown COMPLETE", { token, why });
+      }
+      if (capturedRef.current !== captureAt) {
+        capturedRef.current = captureAt;
+        if (typeof console !== "undefined") {
+          // eslint-disable-next-line no-console
+          console.info("[LongDistance] capture START", { token });
+        }
         void doCapture();
       }
     };
     const id = window.setInterval(() => {
+      if (token !== countdownTokenRef.current) {
+        window.clearInterval(id);
+        return;
+      }
       const now = Date.now();
       const remain = Math.ceil((target - now) / 1000);
       setCount(remain > 0 ? remain : 0);
+      if (typeof console !== "undefined") {
+        // eslint-disable-next-line no-console
+        console.info("[LongDistance] countdown TICK:", { token, value: remain > 0 ? remain : 0 });
+        // eslint-disable-next-line no-console
+        console.info("[LongDistance] session status during countdown:", {
+          token,
+          status: sessionRef.current?.status,
+        });
+        // eslint-disable-next-line no-console
+        console.info("[LongDistance] capturedPhoto during countdown:", {
+          token,
+          hasPreview: !!localPreviewRef.current,
+        });
+      }
       if (target - now <= 0 || now - startedAt > WATCHDOG_MS) {
-        fire();
+        fire(target - now <= 0 ? "target-reached" : "watchdog");
       }
     }, 200);
-    return () => window.clearInterval(id);
+    return () => {
+      window.clearInterval(id);
+      if (typeof console !== "undefined") {
+        // eslint-disable-next-line no-console
+        console.info("[LongDistance] countdown CLEANUP", {
+          token,
+          reason: `effect re-run/unmount; status at setup was ${statusAtStart}`,
+        });
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.status, session?.capture_at, doCapture]);
 
   // Both photos in → compose the shared strip locally. Gated on an
@@ -522,7 +592,7 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
     const stream = (v?.srcObject as MediaStream | null) ?? null;
     if (typeof console !== "undefined") {
       // eslint-disable-next-line no-console
-      console.info("[LongDistance] Take Photo clicked", {
+      console.info("[LongDistance] TAKE PHOTO clicked", {
         status: session?.status,
         creator_ready: session?.creator_ready,
         partner_ready: session?.partner_ready,
