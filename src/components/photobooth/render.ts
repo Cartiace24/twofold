@@ -544,59 +544,22 @@ export async function composeTogetherStripCanvas(
 export type TogetherLayout = "side" | "stack" | "polaroid";
 export type TogetherFrameStyle = "paper" | "film" | "polaroid";
 
-/** Per-photo crop over the cover window: s>=1 zoom, fx/fy pan in [-1,1]
- *  as fractions of the available overflow. The editor preview derives its
- *  CSS from frameWindow(), so preview and export match exactly. */
-export interface FrameTransform {
-  s: number;
-  fx: number;
-  fy: number;
-}
-export const FRAME_TRANSFORM_DEFAULT: FrameTransform = { s: 1, fx: 0, fy: 0 };
-
-export function frameWindow(
-  sw: number,
-  sh: number,
-  dw: number,
-  dh: number,
-  t: FrameTransform
-): { sx: number; sy: number; w: number; h: number } {
-  const base = coverSrc(sw, sh, dw, dh);
-  const s = Math.min(3.5, Math.max(1, t.s || 1));
-  const fx = Math.max(-1, Math.min(1, t.fx || 0));
-  const fy = Math.max(-1, Math.min(1, t.fy || 0));
-  const w = base.w / s;
-  const h = base.h / s;
-  const maxOx = Math.max(0, (base.w - w) / 2);
-  const maxOy = Math.max(0, (base.h - h) / 2);
-  const cx = base.sx + base.w / 2 + fx * maxOx;
-  const cy = base.sy + base.h / 2 + fy * maxOy;
-  return {
-    sx: Math.min(Math.max(cx - w / 2, 0), Math.max(sw - w, 0)),
-    sy: Math.min(Math.max(cy - h / 2, 0), Math.max(sh - h, 0)),
-    w,
-    h,
-  };
-}
-
 const WINE = "#7D2E3B";
 const MUTED = "#8A7F72";
 
-function drawWindow(
+/** Draw the COMPLETE photo, proportionally scaled — never cropped, never
+ *  stretched. The destination rect must already match the photo aspect. */
+function drawWholePhoto(
   ctx: CanvasRenderingContext2D,
   photo: HTMLCanvasElement,
-  t: FrameTransform,
   dx: number,
   dy: number,
   dw: number,
   dh: number
 ) {
-  const win = frameWindow(photo.width, photo.height, dw, dh, t);
-  // Paper underlay first: the cover window always fills the rect, but this
-  // guarantees no unpainted (JPEG-black) seam can survive rounding.
   ctx.fillStyle = PAPER;
   ctx.fillRect(dx, dy, dw, dh);
-  ctx.drawImage(photo, win.sx, win.sy, win.w, win.h, dx, dy, dw, dh);
+  ctx.drawImage(photo, 0, 0, photo.width, photo.height, dx, dy, dw, dh);
   ctx.strokeStyle = "rgba(43,38,34,0.25)";
   ctx.lineWidth = 2;
   ctx.strokeRect(dx + 1, dy + 1, dw - 2, dh - 2);
@@ -667,8 +630,6 @@ export interface TogetherFrameOpts {
   frame: TogetherFrameStyle;
   photoA: HTMLCanvasElement;
   photoB: HTMLCanvasElement;
-  transA: FrameTransform;
-  transB: FrameTransform;
   nameA: string;
   nameB: string;
   showNames: boolean;
@@ -679,22 +640,56 @@ export interface TogetherFrameOpts {
   maxLong?: number;
 }
 
+/** Contain-fit: scale the whole photo proportionally into a box of at most
+ *  (maxW × maxH). Nothing is ever cropped. */
+function containSize(
+  sw: number,
+  sh: number,
+  maxW: number,
+  maxH: number
+): { w: number; h: number } {
+  const s = Math.min(maxW / sw, maxH / sh);
+  return { w: Math.max(1, Math.round(sw * s)), h: Math.max(1, Math.round(sh * s)) };
+}
+
 async function gridFrameCanvas(o: TogetherFrameOpts): Promise<HTMLCanvasElement> {
   const side = o.layout === "side";
-  const W = side ? 1500 : 1200;
   const pad = 48;
   const gap = 24;
-  const cellW = side ? Math.round((W - pad * 2 - gap) / 2) : W - pad * 2;
-  const cellH = side ? Math.round((cellW * 4) / 3) : Math.round((cellW * 3) / 4);
   const nameH = o.showNames ? 58 : 0;
   const footH = footerHeight(o.caption, o.showDate, o.showMark);
   const filmBar = o.frame === "film" ? 90 : 0;
   const polaroidPad = o.frame === "polaroid" ? 40 : 0;
-  const blockH = side ? cellH + nameH : (cellH + nameH) * 2 + gap;
+
+  // Composition adapts to the photos: shared row height (side) or shared
+  // column width (stack), everything else derived from real aspects.
+  let cellA = { w: 0, h: 0 };
+  let cellB = { w: 0, h: 0 };
+  let contentW = 0;
+  let blockH = 0;
+  if (side) {
+    let rowH = 900;
+    const aA = o.photoA.width / o.photoA.height;
+    const aB = o.photoB.width / o.photoB.height;
+    if ((rowH * aA + gap + rowH * aB) > 2000) {
+      rowH = Math.round(((2000 - gap) / (aA + aB)) * 10) / 10;
+    }
+    cellA = { w: Math.round(rowH * aA), h: Math.round(rowH) };
+    cellB = { w: Math.round(rowH * aB), h: Math.round(rowH) };
+    contentW = cellA.w + gap + cellB.w;
+    blockH = Math.round(rowH) + nameH;
+  } else {
+    const colW = 1104;
+    cellA = { w: colW, h: Math.round(colW / (o.photoA.width / o.photoA.height)) };
+    cellB = { w: colW, h: Math.round(colW / (o.photoB.width / o.photoB.height)) };
+    contentW = colW;
+    blockH = cellA.h + nameH + gap + cellB.h + nameH;
+  }
+  const W = contentW + pad * 2 + polaroidPad * 2;
   const H = filmBar + pad + polaroidPad + blockH + footH + pad + polaroidPad + filmBar;
 
   const canvas = document.createElement("canvas");
-  canvas.width = W + polaroidPad * 2;
+  canvas.width = W;
   canvas.height = H;
   const ctx = canvas.getContext("2d")!;
   ctx.fillStyle = PAPER;
@@ -710,24 +705,29 @@ async function gridFrameCanvas(o: TogetherFrameOpts): Promise<HTMLCanvasElement>
   }
 
   const ox = pad + polaroidPad;
-  let oy = filmBar + pad + polaroidPad;
+  const oy = filmBar + pad + polaroidPad;
   const cells = side
     ? [
         { x: ox, y: oy },
-        { x: ox + cellW + gap, y: oy },
+        { x: ox + cellA.w + gap, y: oy },
       ]
     : [
         { x: ox, y: oy },
-        { x: ox, y: oy + cellH + nameH + gap },
+        { x: ox, y: oy + cellA.h + nameH + gap },
       ];
   const photos = [
-    { photo: o.photoA, t: o.transA, name: o.nameA },
-    { photo: o.photoB, t: o.transB, name: o.nameB },
+    { photo: o.photoA, size: cellA, name: o.nameA },
+    { photo: o.photoB, size: cellB, name: o.nameB },
   ];
   for (let i = 0; i < 2; i++) {
-    drawWindow(ctx, photos[i].photo, photos[i].t, cells[i].x, cells[i].y, cellW, cellH);
+    drawWholePhoto(ctx, photos[i].photo, cells[i].x, cells[i].y, photos[i].size.w, photos[i].size.h);
     if (o.showNames) {
-      await drawPhotoName(ctx, photos[i].name, cells[i].x + 4, cells[i].y + cellH + nameH / 2);
+      await drawPhotoName(
+        ctx,
+        photos[i].name,
+        cells[i].x + 4,
+        cells[i].y + photos[i].size.h + nameH / 2
+      );
     }
   }
   await drawFrameFooter(ctx, canvas.width, ox, oy + blockH, {
@@ -741,7 +741,23 @@ async function gridFrameCanvas(o: TogetherFrameOpts): Promise<HTMLCanvasElement>
 
 async function polaroidFrameCanvas(o: TogetherFrameOpts): Promise<HTMLCanvasElement> {
   const W = 1200;
-  const H = 1500;
+  const pad = 48;
+  const bw = 26;
+  const foot = 104;
+  // Each card fits its whole photo inside a max box — full image, no crop.
+  const fitA = containSize(o.photoA.width, o.photoA.height, 620, 500);
+  const fitB = containSize(o.photoB.width, o.photoB.height, 620, 500);
+  const cards = [
+    { photo: o.photoA, size: fitA, name: o.nameA, cx: 555, rot: -4 },
+    { photo: o.photoB, size: fitB, name: o.nameB, cx: 645, rot: 3.5 },
+  ];
+  const cardHs = cards.map((c) => c.size.h + bw + foot);
+  const overlap = 30;
+  const top = 110;
+  const footY = top + cardHs[0] + cardHs[1] - overlap;
+  const footH = footerHeight(o.caption, o.showDate, o.showMark);
+  const H = footY + footH + pad;
+
   const canvas = document.createElement("canvas");
   canvas.width = W;
   canvas.height = H;
@@ -749,19 +765,13 @@ async function polaroidFrameCanvas(o: TogetherFrameOpts): Promise<HTMLCanvasElem
   ctx.fillStyle = PAPER;
   ctx.fillRect(0, 0, W, H);
 
-  const dw = 620;
-  const dh = 465;
-  const bw = 26;
-  const foot = 104;
-  const cards = [
-    { photo: o.photoA, t: o.transA, name: o.nameA, cx: 555, cy: 450, rot: -4 },
-    { photo: o.photoB, t: o.transB, name: o.nameB, cx: 655, cy: 960, rot: 3.5 },
-  ];
+  let y = top;
   for (const c of cards) {
-    const cw = dw + bw * 2;
-    const ch = dh + bw + foot;
+    const cw = c.size.w + bw * 2;
+    const ch = c.size.h + bw + foot;
+    const cy = y + ch / 2;
     ctx.save();
-    ctx.translate(c.cx, c.cy);
+    ctx.translate(c.cx, cy);
     ctx.rotate((c.rot * Math.PI) / 180);
     ctx.shadowColor = "rgba(43,38,34,0.28)";
     ctx.shadowBlur = 18;
@@ -771,7 +781,7 @@ async function polaroidFrameCanvas(o: TogetherFrameOpts): Promise<HTMLCanvasElem
     ctx.shadowColor = "transparent";
     ctx.shadowBlur = 0;
     ctx.shadowOffsetY = 0;
-    drawWindow(ctx, c.photo, c.t, -dw / 2, -ch / 2 + bw, dw, dh);
+    drawWholePhoto(ctx, c.photo, -c.size.w / 2, -ch / 2 + bw, c.size.w, c.size.h);
     if (o.showNames && c.name.trim()) {
       const caveat = await loadFont("Caveat", 40);
       ctx.fillStyle = MUTED;
@@ -782,8 +792,9 @@ async function polaroidFrameCanvas(o: TogetherFrameOpts): Promise<HTMLCanvasElem
       ctx.textAlign = "left";
     }
     ctx.restore();
+    y += ch - overlap;
   }
-  await drawFrameFooter(ctx, W, 48, 1300, {
+  await drawFrameFooter(ctx, W, pad, footY, {
     caption: o.caption,
     showDate: o.showDate,
     showMark: o.showMark,

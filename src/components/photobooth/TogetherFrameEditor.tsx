@@ -1,153 +1,64 @@
-import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, ArrowLeftRight, Loader2, RotateCcw } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ArrowLeft, ArrowLeftRight, Loader2 } from "lucide-react";
 import { Button, Field, Input } from "../ui/primitives";
 import { FilterTabs, Tape } from "../scrapbook/bits";
 import {
   canvasToJpeg,
   composeTogetherFrameCanvas,
   decodeToCanvas,
-  FRAME_TRANSFORM_DEFAULT,
-  frameWindow,
-  type FrameTransform,
   type TogetherFrameStyle,
   type TogetherLayout,
 } from "./render";
 
 /* ------------------------------------------------------------------ */
-/* pan / zoom cell — CSS preview derived from frameWindow(), so what   */
-/* you see is exactly what the export draws. Drag to pan, pinch or     */
-/* wheel to zoom.                                                      */
+/* full-photo cell — the complete photograph at its natural aspect,    */
+/* never cropped. The composition adapts to the photos, not vice versa.*/
 /* ------------------------------------------------------------------ */
 
-function PanZoomCell({
+function FullPhotoCell({
   src,
-  sw,
-  sh,
-  aspect,
-  value,
-  onChange,
   label,
+  name,
+  showName,
+  frame,
 }: {
   src: string;
-  sw: number;
-  sh: number;
-  aspect: number;
-  value: FrameTransform;
-  onChange: (v: FrameTransform) => void;
   label: string;
+  name: string;
+  showName: boolean;
+  frame?: "plain" | "polaroid-card";
 }) {
-  const boxRef = useRef<HTMLDivElement | null>(null);
-  const [cw, setCw] = useState(0);
-  const [imgBroken, setImgBroken] = useState(false);
-  const pointers = useRef(new Map<number, { x: number; y: number }>());
-  const pinchBase = useRef<{ d: number; s: number } | null>(null);
-  const valRef = useRef(value);
-  valRef.current = value;
-  const changeRef = useRef(onChange);
-  changeRef.current = onChange;
-
-  useEffect(() => {
-    const measure = () => {
-      if (boxRef.current) setCw(boxRef.current.clientWidth);
-    };
-    measure();
-    window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
-  }, []);
-
-  // Desktop wheel zoom needs a non-passive listener to own the gesture.
-  useEffect(() => {
-    const el = boxRef.current;
-    if (!el) return;
-    const onWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      const v = valRef.current;
-      const s = Math.min(3.5, Math.max(1, v.s * (e.deltaY < 0 ? 1.09 : 0.92)));
-      changeRef.current({ ...v, s });
-    };
-    el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
-  }, []);
-
-  const ch = cw > 0 ? cw / aspect : 0;
-  const win = cw > 0 ? frameWindow(sw, sh, cw, ch, value) : null;
-  const k = win ? cw / win.w : 1;
-
-  const dist = (a: { x: number; y: number }, b: { x: number; y: number }) =>
-    Math.hypot(a.x - b.x, a.y - b.y);
-
-  const panBy = (dxPx: number, dyPx: number, base: FrameTransform) => {
-    const w = frameWindow(sw, sh, cw, ch, base);
-    const kw = cw / w.w;
-    const overflowX = Math.max(0, sw * kw - cw);
-    const overflowY = Math.max(0, sh * kw - ch);
-    const fx = overflowX > 0 ? Math.max(-1, Math.min(1, base.fx + dxPx / (overflowX / 2))) : 0;
-    const fy = overflowY > 0 ? Math.max(-1, Math.min(1, base.fy + dyPx / (overflowY / 2))) : 0;
-    changeRef.current({ ...base, fx, fy });
-  };
-
+  const [broken, setBroken] = useState(false);
+  if (broken) {
+    return (
+      <div className="w-full bg-[#EDE6D6] border border-[#E5DAC6] grid place-items-center px-4 py-10 text-center">
+        <p className="font-hand text-[19px] text-[#8A7F72]">this photo didn't load — try retaking?</p>
+      </div>
+    );
+  }
+  if (frame === "polaroid-card") {
+    return (
+      <figure className="bg-white border border-[#E5DAC6] shadow-md p-2.5 pb-2">
+        <img src={src} alt={label} draggable={false} onError={() => setBroken(true)} className="block w-full h-auto" />
+        {showName && !!name.trim() && (
+          <figcaption className="font-hand text-[17px] text-[#4A423B] text-center leading-tight pt-1.5 pb-0.5">
+            {name.trim()} ♡
+          </figcaption>
+        )}
+      </figure>
+    );
+  }
   return (
-    <div
-      ref={boxRef}
-      role="application"
-      aria-label={`${label} — drag to reposition, pinch or scroll to zoom`}
-      className="relative w-full overflow-hidden bg-[#EDE6D6] border border-[#E5DAC6] select-none [touch-action:none]"
-      style={{ height: ch || 160 }}
-      onPointerDown={(e) => {
-        (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
-        pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-        if (pointers.current.size === 2) {
-          const [a, b] = [...pointers.current.values()];
-          pinchBase.current = { d: Math.max(1, dist(a, b)), s: valRef.current.s };
-        }
-      }}
-      onPointerMove={(e) => {
-        const prev = pointers.current.get(e.pointerId);
-        if (!prev) return;
-        const dx = e.clientX - prev.x;
-        const dy = e.clientY - prev.y;
-        pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-        if (pointers.current.size === 2) {
-          const [a, b] = [...pointers.current.values()];
-          const base = pinchBase.current;
-          if (!base) return;
-          const s = Math.min(3.5, Math.max(1, (base.s * Math.max(1, dist(a, b))) / base.d));
-          changeRef.current({ ...valRef.current, s });
-          return;
-        }
-        // Single pointer (mouse, pen, or one finger): drag to pan.
-        if (Math.abs(dx) + Math.abs(dy) > 0) panBy(dx, dy, valRef.current);
-      }}
-      onPointerUp={(e) => {
-        pointers.current.delete(e.pointerId);
-        if (pointers.current.size < 2) pinchBase.current = null;
-      }}
-      onPointerCancel={(e) => {
-        pointers.current.delete(e.pointerId);
-        if (pointers.current.size < 2) pinchBase.current = null;
-      }}
-    >
-      {win && !imgBroken && (
-        <img
-          src={src}
-          alt={label}
-          draggable={false}
-          onError={() => setImgBroken(true)}
-          className="absolute max-w-none pointer-events-none"
-          style={{
-            width: sw * k,
-            height: sh * k,
-            left: -win.sx * k,
-            top: -win.sy * k,
-          }}
-        />
-      )}
-      {(!win || imgBroken) && (
-        <div className="absolute inset-0 grid place-items-center px-4 text-center">
-          <p className="font-hand text-[19px] text-[#8A7F72]">
-            {imgBroken ? "this photo didn't load — try retaking?" : "loading photo…"}
-          </p>
-        </div>
+    <div>
+      <img
+        src={src}
+        alt={label}
+        draggable={false}
+        onError={() => setBroken(true)}
+        className="block w-full h-auto border border-[#E5DAC6]"
+      />
+      {showName && !!name.trim() && (
+        <p className="font-hand text-[17px] text-[#8A7F72] mt-1">{name.trim()} ♡</p>
       )}
     </div>
   );
@@ -214,10 +125,6 @@ export default function TogetherFrameEditor({
   const [layout, setLayout] = useState<TogetherLayout>("side");
   const [frame, setFrame] = useState<TogetherFrameStyle>("paper");
   const [swapped, setSwapped] = useState(false);
-  const [trans, setTrans] = useState<{ a: FrameTransform; b: FrameTransform }>({
-    a: { ...FRAME_TRANSFORM_DEFAULT },
-    b: { ...FRAME_TRANSFORM_DEFAULT },
-  });
   const [showNames, setShowNames] = useState(true);
   const [showDate, setShowDate] = useState(true);
   const [showMark, setShowMark] = useState(true);
@@ -272,12 +179,14 @@ export default function TogetherFrameEditor({
   }
 
   const order: Array<"a" | "b"> = swapped ? ["b", "a"] : ["a", "b"];
-  const first = order[0] === "a" ? { url: photoAUrl, c: srcA, t: trans.a, name: nameA } : { url: photoBUrl, c: srcB, t: trans.b, name: nameB };
-  const second = order[1] === "a" ? { url: photoAUrl, c: srcA, t: trans.a, name: nameA } : { url: photoBUrl, c: srcB, t: trans.b, name: nameB };
-  const setFirstT = (v: FrameTransform) =>
-    setTrans((p) => (order[0] === "a" ? { ...p, a: v } : { ...p, b: v }));
-  const setSecondT = (v: FrameTransform) =>
-    setTrans((p) => (order[1] === "a" ? { ...p, a: v } : { ...p, b: v }));
+  const first =
+    order[0] === "a"
+      ? { url: photoAUrl, c: srcA, name: nameA }
+      : { url: photoBUrl, c: srcB, name: nameB };
+  const second =
+    order[1] === "a"
+      ? { url: photoAUrl, c: srcA, name: nameA }
+      : { url: photoBUrl, c: srcB, name: nameB };
 
   const doExport = async () => {
     if (exporting) return;
@@ -289,8 +198,6 @@ export default function TogetherFrameEditor({
         frame,
         photoA: first.c,
         photoB: second.c,
-        transA: first.t,
-        transB: second.t,
         nameA: showNames ? first.name : "",
         nameB: showNames ? second.name : "",
         showNames,
@@ -329,8 +236,6 @@ export default function TogetherFrameEditor({
     </button>
   );
 
-  const aspect = layout === "side" ? 3 / 4 : 4 / 3;
-
   return (
     <div className="lg:grid lg:grid-cols-[1fr_300px] lg:gap-5 lg:items-start">
       {/* preview */}
@@ -338,37 +243,21 @@ export default function TogetherFrameEditor({
         <div className="relative bg-[#FFFDF7] border border-[#E5DAC6] p-3">
           <Tape className="left-1/2 -translate-x-1/2 -top-[11px]" />
           {layout === "polaroid" ? (
-            <div className="relative py-3">
-              <div className="rotate-[-3deg] border-[10px] border-b-[34px] border-white shadow-md max-w-[280px] mx-auto">
-                <PanZoomCell src={first.url} sw={first.c.width} sh={first.c.height} aspect={aspect} value={first.t} onChange={setFirstT} label={`First photo (${first.name || "you"})`} />
-                {showNames && !!first.name.trim() && (
-                  <p className="font-hand text-[17px] text-[#4A423B] text-center leading-none mt-0.5">{first.name.trim()} ♡</p>
-                )}
+            <div className="relative py-3 flex flex-col items-center gap-1">
+              <div className="rotate-[-3deg] max-w-[280px] w-full">
+                <FullPhotoCell src={first.url} label={`First photo (${first.name || "you"})`} name={first.name} showName={showNames} frame="polaroid-card" />
               </div>
-              <div className="rotate-[2.5deg] border-[10px] border-b-[34px] border-white shadow-md max-w-[280px] mx-auto -mt-3 ml-auto mr-2">
-                <PanZoomCell src={second.url} sw={second.c.width} sh={second.c.height} aspect={aspect} value={second.t} onChange={setSecondT} label={`Second photo (${second.name || "them"})`} />
-                {showNames && !!second.name.trim() && (
-                  <p className="font-hand text-[17px] text-[#4A423B] text-center leading-none mt-0.5">{second.name.trim()} ♡</p>
-                )}
+              <div className="rotate-[2.5deg] max-w-[280px] w-full -mt-2 ml-6">
+                <FullPhotoCell src={second.url} label={`Second photo (${second.name || "them"})`} name={second.name} showName={showNames} frame="polaroid-card" />
               </div>
             </div>
           ) : (
-            <div className={layout === "side" ? "grid grid-cols-2 gap-2" : "flex flex-col gap-2"}>
-              <div>
-                <PanZoomCell src={first.url} sw={first.c.width} sh={first.c.height} aspect={aspect} value={first.t} onChange={setFirstT} label={`First photo (${first.name || "you"})`} />
-                {showNames && !!first.name.trim() && (
-                  <p className="font-hand text-[17px] text-[#8A7F72] mt-1">{first.name.trim()} ♡</p>
-                )}
-              </div>
-              <div>
-                <PanZoomCell src={second.url} sw={second.c.width} sh={second.c.height} aspect={aspect} value={second.t} onChange={setSecondT} label={`Second photo (${second.name || "them"})`} />
-                {showNames && !!second.name.trim() && (
-                  <p className="font-hand text-[17px] text-[#8A7F72] mt-1">{second.name.trim()} ♡</p>
-                )}
-              </div>
+            <div className={layout === "side" ? "grid grid-cols-2 gap-2 items-start" : "flex flex-col gap-2"}>
+              <FullPhotoCell src={first.url} label={`First photo (${first.name || "you"})`} name={first.name} showName={showNames} />
+              <FullPhotoCell src={second.url} label={`Second photo (${second.name || "them"})`} name={second.name} showName={showNames} />
             </div>
           )}
-          <p className="mt-2 text-[11.5px] text-[#8A7F72] text-center">drag to reposition · pinch or scroll to zoom</p>
+          <p className="mt-2 text-[11.5px] text-[#8A7F72] text-center">your complete photos, laid out together ♡</p>
         </div>
       </div>
 
@@ -396,22 +285,13 @@ export default function TogetherFrameEditor({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            onClick={() => setSwapped((s) => !s)}
-            aria-label={layout === "side" ? "Swap left and right photos" : "Swap top and bottom photos"}
-            className="touch inline-flex items-center justify-center gap-1.5 bg-[#FFFDF7] border border-[#E5DAC6] rounded-[3px] font-bold text-[14px] text-[#4A423B]"
-          >
-            <ArrowLeftRight size={17} /> Swap
-          </button>
-          <button
-            onClick={() => setTrans({ a: { ...FRAME_TRANSFORM_DEFAULT }, b: { ...FRAME_TRANSFORM_DEFAULT } })}
-            aria-label="Reset zoom and position for both photos"
-            className="touch inline-flex items-center justify-center gap-1.5 bg-[#FFFDF7] border border-[#E5DAC6] rounded-[3px] font-bold text-[14px] text-[#4A423B]"
-          >
-            <RotateCcw size={17} /> Reset
-          </button>
-        </div>
+        <button
+          onClick={() => setSwapped((s) => !s)}
+          aria-label={layout === "side" ? "Swap left and right photos" : "Swap top and bottom photos"}
+          className="touch inline-flex items-center justify-center gap-1.5 bg-[#FFFDF7] border border-[#E5DAC6] rounded-[3px] font-bold text-[14px] text-[#4A423B]"
+        >
+          <ArrowLeftRight size={17} /> Swap photos
+        </button>
 
         {layout !== "polaroid" && (
           <div>
