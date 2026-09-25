@@ -81,18 +81,23 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
     active: !!session,
   });
   const partnerVideoRef = useRef<HTMLVideoElement | null>(null);
-  useEffect(() => {
-    const el = partnerVideoRef.current;
-    if (!el) return;
-    if (el.srcObject !== pv.partnerStream) el.srcObject = pv.partnerStream;
-    if (pv.partnerStream && typeof console !== "undefined") {
-      // eslint-disable-next-line no-console
-      console.info("[LongDistance][WebRTC] partner video attached", {
-        streamId: pv.partnerStream.id,
-      });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pv.partnerStream]);
+  // Callback ref: attaches on every element mount (e.g. returning from the
+  // result view on retake) AND whenever the stream changes. An effect keyed
+  // only on stream identity misses the remount case with a live stream.
+  const attachPartnerVideo = useCallback(
+    (el: HTMLVideoElement | null) => {
+      partnerVideoRef.current = el;
+      if (!el) return;
+      if (el.srcObject !== pv.partnerStream) el.srcObject = pv.partnerStream;
+      if (pv.partnerStream && typeof console !== "undefined") {
+        // eslint-disable-next-line no-console
+        console.info("[LongDistance][WebRTC] partner video attached", {
+          streamId: pv.partnerStream.id,
+        });
+      }
+    },
+    [pv.partnerStream]
+  );
   // Desktop-vs-mobile diagnosis: one snapshot per state change.
   useEffect(() => {
     if (typeof console === "undefined") return;
@@ -415,7 +420,7 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
   useEffect(() => {
     if (typeof console !== "undefined") {
       // eslint-disable-next-line no-console
-      console.info("[LongDistance] booth build together-v7-webrtc");
+      console.info("[LongDistance] booth build together-v8-attach");
     }
   }, []);
 
@@ -1008,7 +1013,7 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
           <div className="relative w-full overflow-hidden bg-black aspect-[4/3]">
             {pv.partnerStream ? (
               <video
-                ref={partnerVideoRef}
+                ref={attachPartnerVideo}
                 autoPlay
                 playsInline
                 muted
