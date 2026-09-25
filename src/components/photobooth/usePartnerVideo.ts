@@ -206,10 +206,20 @@ export function usePartnerVideo(args: {
         return;
       }
       if (msg.kind === "offer") {
-        // Only the partner answers, and only once per generation.
-        if (isInitiator || !msg.sdp || pc.signalingState !== "stable") return;
+        // Symmetric re-offers with polite-peer glare handling: the partner
+        // (polite) rolls back a pending local offer on collision, while the
+        // creator (impolite) ignores incoming offers mid-flight. Either side
+        // may therefore renegotiate a late camera track — no deadlock.
+        if (!msg.sdp) return;
+        if (isInitiator && pc.signalingState !== "stable") return;
+        if (!isInitiator && pc.signalingState !== "stable" && pc.signalingState !== "have-local-offer")
+          return;
         pvlog("offer received");
         try {
+          if (!isInitiator && pc.signalingState === "have-local-offer") {
+            await pc.setLocalDescription({ type: "rollback" });
+            pvlog("offer collision, rolled back local offer");
+          }
           await pc.setRemoteDescription(msg.sdp);
           diagPc("after offer applied");
           await flushIce();
@@ -273,18 +283,20 @@ export function usePartnerVideo(args: {
       if (cancelled || gen !== genRef.current) return;
       if (e.candidate) send({ kind: "ice", candidate: e.candidate.toJSON() });
     };
-    // Late local tracks (camera came up after the offer, or a fresh track
-    // that addTrack missed): renegotiate as initiator, once per generation.
-    // Camera flips use replaceTrack instead and never reach this path.
+    // Late local tracks (camera came up after the first offer): either side
+    // may renegotiate while stable; glare is resolved by the polite-peer
+    // offer handling above. Camera flips use replaceTrack and never reach
+    // this path.
     pc.onnegotiationneeded = () => {
       void (async () => {
         if (cancelled || gen !== genRef.current || !pc) return;
-        if (!isInitiator || offeredRef.current || pc.signalingState !== "stable") return;
+        if (pc.signalingState !== "stable") return;
+        // Note: deliberately does NOT set offeredRef — that flag belongs to
+        // the hello handshake, which must still fire when the peer arrives.
         try {
           const offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
           if (cancelled || gen !== genRef.current) return;
-          offeredRef.current = true;
           send({ kind: "offer", sdp: { type: offer.type, sdp: offer.sdp ?? "" } });
           pvlog("offer created");
           diagPc("after offer created (renegotiation)");

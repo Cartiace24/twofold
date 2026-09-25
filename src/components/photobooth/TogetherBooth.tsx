@@ -415,7 +415,7 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
   useEffect(() => {
     if (typeof console !== "undefined") {
       // eslint-disable-next-line no-console
-      console.info("[LongDistance] booth build together-v6-retake");
+      console.info("[LongDistance] booth build together-v7-webrtc");
     }
   }, []);
 
