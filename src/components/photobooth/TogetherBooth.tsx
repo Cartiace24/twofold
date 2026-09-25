@@ -174,6 +174,20 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
         : pv.pvStatus === "unavailable"
           ? "Partner camera unavailable"
           : "waiting for your person…";
+  // Identity diagnostic: traces the exact value rendered for the partner.
+  useEffect(() => {
+    if (typeof console === "undefined") return;
+    if (!session) return;
+    // eslint-disable-next-line no-console
+    console.info("[LongDistance][Identity]", {
+      partnerId: role === "creator" ? session.partner_id : session.created_by,
+      profileDisplayName: partnerProfile?.display_name ?? null,
+      sessionPartnerName: role === "creator" ? session.partner_name : session.creator_name,
+      authEmail: user?.email ?? null,
+      renderedPartnerName: otherName,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.id, role, session?.partner_id, session?.created_by, session?.partner_name, session?.creator_name, partnerProfile?.display_name, user?.email, otherName]);
   // Peer-identity confirmation: logs once per resolved peer id.
   const peerResolvedRef = useRef<string | null>(null);
   useEffect(() => {

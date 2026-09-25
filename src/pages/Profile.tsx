@@ -212,8 +212,7 @@ export default function Profile() {
                     <Avatar src={partnerAvatarUrl} name={partnerProfile?.display_name} size={84} frame="polaroid" />
                     <div className="min-w-0">
                       <p className="font-display font-semibold text-[15px] leading-tight truncate">{partnerProfile?.display_name ?? "—"}</p>
-                      <p className="text-[12px] text-[#8A7F72] truncate">{partnerProfile?.email ?? (partnerProfile ? "" : "not yet joined")}</p>
-                      <p className="font-hand text-[16px] text-[#8A7F72] leading-none mt-1">{partnerProfile ? "with you ♡" : "awaiting"}</p>
+                      <p className="font-hand text-[16px] text-[#8A7F72] leading-none mt-1">{partnerProfile ? "with you ♡" : "not yet joined"}</p>
                     </div>
                   </div>
                   {!partnerProfile && <p className="mt-2 text-[12px] text-[#8A7F72]">Share your invite code to see them here.</p>}
