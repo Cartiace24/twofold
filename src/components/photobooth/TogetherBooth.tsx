@@ -83,7 +83,15 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
   const partnerVideoRef = useRef<HTMLVideoElement | null>(null);
   useEffect(() => {
     const el = partnerVideoRef.current;
-    if (el) el.srcObject = pv.partnerStream;
+    if (!el) return;
+    if (el.srcObject !== pv.partnerStream) el.srcObject = pv.partnerStream;
+    if (pv.partnerStream && typeof console !== "undefined") {
+      // eslint-disable-next-line no-console
+      console.info("[LongDistance][WebRTC] partner video attached", {
+        streamId: pv.partnerStream.id,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pv.partnerStream]);
   // Desktop-vs-mobile diagnosis: one snapshot per state change.
   useEffect(() => {

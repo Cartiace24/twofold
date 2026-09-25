@@ -97,6 +97,26 @@ export function usePartnerVideo(args: {
     });
   }, [isInitiator, peerUserId]);
 
+  /** Fallback: adopt a live remote video receiver track straight into
+   *  partnerStream when `ontrack` never delivers it (some browsers/timing
+   *  expose the receiver without firing the event). Same state path as the
+   *  normal handler — never creates a new peer connection. */
+  const adoptReceiverStream = useCallback(() => {
+    const pc = pcRef.current;
+    if (!pc || pc.signalingState === "closed") return false;
+    if (partnerStreamRef.current) return true;
+    const recv = pc
+      .getReceivers()
+      .find((r) => r.track && r.track.kind === "video" && r.track.readyState === "live");
+    const track = recv?.track ?? null;
+    if (!track) return false;
+    const stream = new MediaStream([track]);
+    setPartnerStream(stream);
+    setPvStatus("connected");
+    pvlog("receiver fallback used", { via: "getReceivers", trackId: track.id });
+    return true;
+  }, []);
+
   /** Attach the current local video track (or swap it after a camera flip)
    *  without renegotiating the whole connection. */
   const refreshLocal = useCallback(() => {
@@ -211,6 +231,7 @@ export function usePartnerVideo(args: {
           await pc.setRemoteDescription(msg.sdp);
           await flushIce();
           diagPc("after answer applied");
+          adoptReceiverStream();
         } catch {
           /* ignore */
         }
@@ -292,7 +313,17 @@ export function usePartnerVideo(args: {
       }
       const [s] = e.streams;
       if (!s) {
-        pvlog("ontrack no stream, skipping state");
+        // Event without a stream wrapper: adopt the bare track directly.
+        const track = e.track && e.track.kind === "video" ? e.track : null;
+        if (track && track.readyState === "live") {
+          const stream = new MediaStream([track]);
+          setPartnerStream(stream);
+          setPvStatus("connected");
+          pvlog("receiver fallback used", { via: "bare-track", trackId: track.id });
+          pvlog("remote stream state updated", { intendedStreamId: stream.id });
+        } else {
+          pvlog("ontrack no stream, skipping state");
+        }
         return;
       }
       pvlog("remote track received", {
@@ -327,6 +358,9 @@ export function usePartnerVideo(args: {
         autoRestartsRef.current = 0;
         window.clearTimeout(timeout);
         setPvStatus("connected");
+        // ontrack is primary; this only fills the gap when the event never
+        // fires despite live remote media (no-op when stream already set).
+        adoptReceiverStream();
       } else if (st === "disconnected") {
         setPvStatus("interrupted");
       } else if (st === "failed" || st === "closed") {
