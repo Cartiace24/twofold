@@ -547,7 +547,12 @@ export function useTogetherSession(
     if (!sb || !session) return;
     // retake_requested included: re-reported readiness after a retake must
     // also converge when realtime drops it — same backstop, no new system.
-    if (!["joined", "ready", "countdown", "retake_requested"].includes(session.status)) return;
+    // waiting included too: the creator learns the join (partner_id +
+    // status) here even if the join event never arrives — otherwise one
+    // missed realtime message wedges the creator pre-join forever while
+    // the partner proceeds, and peer-gated layers (WebRTC) never start.
+    if (!["waiting", "joined", "ready", "countdown", "retake_requested"].includes(session.status))
+      return;
     const id = window.setInterval(async () => {
       try {
         const { data } = await sb

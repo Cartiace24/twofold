@@ -149,6 +149,24 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
         : pv.pvStatus === "unavailable"
           ? "Partner camera unavailable"
           : "waiting for your person…";
+  // Peer-identity confirmation: logs once per resolved peer id.
+  const peerResolvedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!peerUserId) {
+      peerResolvedRef.current = null;
+      return;
+    }
+    if (peerResolvedRef.current === peerUserId) return;
+    peerResolvedRef.current = peerUserId;
+    if (typeof console !== "undefined") {
+      // eslint-disable-next-line no-console
+      console.info("[LongDistance][WebRTC][UI-Diag] peer identity resolved", {
+        peerUserId,
+        peerDisplayName: otherName,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [peerUserId, otherName]);
   // UI-Diag: exact render-condition inputs, mirrored from the JSX below.
   useEffect(() => {
     if (typeof console === "undefined") return;
