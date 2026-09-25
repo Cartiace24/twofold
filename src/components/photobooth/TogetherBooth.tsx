@@ -92,6 +92,16 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
     composingRef.current = false;
     setCapState("idle");
     setCount(null);
+    setLocalPreviewUrl((prev) => {
+      if (prev) {
+        try {
+          URL.revokeObjectURL(prev);
+        } catch {
+          /* already gone */
+        }
+      }
+      return null;
+    });
   }, [session?.id]);
 
   // Partner hit retake (or a fresh round started) → both clients return to
@@ -112,6 +122,16 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
       setCount(null);
       setCapState("idle");
       setPageError("");
+      setLocalPreviewUrl((prev) => {
+        if (prev) {
+          try {
+            URL.revokeObjectURL(prev);
+          } catch {
+            /* already gone */
+          }
+        }
+        return null;
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.status, session?.creator_photo, session?.partner_photo]);
@@ -127,6 +147,18 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
 
   const [capState, setCapState] = useState<"idle" | "capturing" | "uploading" | "done" | "failed">("idle");
   const [waitLong, setWaitLong] = useState(false);
+  // Immediate local preview: set straight from the captured Blob (object
+  // URL), shown before upload finishes and independent of partner sync.
+  // Same shared flow on phone and desktop — no device-specific branches.
+  const [localPreviewUrl, setLocalPreviewUrl] = useState<string | null>(null);
+
+  // Build marker: confirms both devices run this exact bundle.
+  useEffect(() => {
+    if (typeof console !== "undefined") {
+      // eslint-disable-next-line no-console
+      console.info("[LongDistance] booth build together-v4-localpreview");
+    }
+  }, []);
 
   const doCapture = useCallback(async () => {
     const video = videoRef.current;
@@ -180,7 +212,28 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
       const blob = await canvasToJpeg(graded, 0.82);
       if (typeof console !== "undefined") {
         // eslint-disable-next-line no-console
-        console.info("[LongDistance] Blob:", { size: blob.size, type: blob.type });
+        console.info("[LongDistance] Capture successful");
+        // eslint-disable-next-line no-console
+        console.info("[LongDistance] Blob size:", { size: blob.size, type: blob.type });
+      }
+      // Show my photo immediately from the Blob — no waiting on upload,
+      // partner, realtime, or the combined strip.
+      const previewUrl = URL.createObjectURL(blob);
+      setLocalPreviewUrl((prev) => {
+        if (prev) {
+          try {
+            URL.revokeObjectURL(prev);
+          } catch {
+            /* already gone */
+          }
+        }
+        return previewUrl;
+      });
+      if (typeof console !== "undefined") {
+        // eslint-disable-next-line no-console
+        console.info("[LongDistance] Local preview URL:", { ready: true });
+        // eslint-disable-next-line no-console
+        console.info("[LongDistance] capturedPhoto state updated");
       }
       const url = await new Promise<string>((res, rej) => {
         const r = new FileReader();
@@ -275,11 +328,21 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
   useEffect(() => {
     return () => {
       if (resultUrl) URL.revokeObjectURL(resultUrl);
+      if (localPreviewUrl) URL.revokeObjectURL(localPreviewUrl);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (resultUrl) URL.revokeObjectURL(resultUrl);
     };
   }, [resultUrl]);
 
   const handleRetake = () => {
     if (resultUrl) URL.revokeObjectURL(resultUrl);
+    if (localPreviewUrl) URL.revokeObjectURL(localPreviewUrl);
+    setLocalPreviewUrl(null);
     setResultUrl(null);
     resultBlobRef.current = null;
     capturedRef.current = null;
@@ -715,6 +778,25 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
                     {otherCaptured ? "✓" : "○"} {otherName}
                   </span>
                 </div>
+                {/* Immediate local preview — my capture, shown before upload
+                    finishes and independent of partner sync. Plain flow
+                    element, no device branches, never display:none. */}
+                {localPreviewUrl && (
+                  <div className="mt-3 flex flex-col items-center">
+                    <img
+                      src={localPreviewUrl}
+                      alt="Your captured photo"
+                      className="max-h-44 w-auto border border-[#E5DAC6] shadow-sm"
+                      onLoad={() => {
+                        if (typeof console !== "undefined") {
+                          // eslint-disable-next-line no-console
+                          console.info("[LongDistance] Rendering captured photo");
+                        }
+                      }}
+                    />
+                    <p className="text-[12.5px] font-bold text-[#6B7F5E] mt-1">your side, captured ♡</p>
+                  </div>
+                )}
                 {iCaptured && otherCaptured && (
                   <p className="mt-2 inline-flex items-center gap-2 font-hand text-[21px] text-[#8A7F72]">
                     <Loader2 size={18} className="animate-spin" /> creating your photo…
