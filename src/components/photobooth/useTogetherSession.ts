@@ -26,6 +26,20 @@ function nowISO(): string {
   return new Date().toISOString();
 }
 
+/** Merge a server row into local session state WITHOUT ever clearing a
+ *  locally-known photo: within a round, photo columns are write-once
+ *  (null → data). Only an explicit local retake/end nulls them. A blind
+ *  full-row overwrite lets a stale echo (e.g. a heartbeat row committed
+ *  before my upload lands) wipe my just-captured photo mid-upload. */
+function mergeRow(prev: PhotoboothSession | null, server: PhotoboothSession): PhotoboothSession {
+  if (!prev || prev.id !== server.id) return server;
+  return {
+    ...server,
+    creator_photo: server.creator_photo ?? prev.creator_photo,
+    partner_photo: server.partner_photo ?? prev.partner_photo,
+  };
+}
+
 /** Owns one long-distance photobooth session: create / join / ready /
  *  countdown / photo columns, all synced through Supabase Realtime on the
  *  session row. State transitions that two clients can race (ready,
@@ -255,7 +269,16 @@ export function useTogetherSession(
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "photobooth_sessions", filter: `id=eq.${id}` },
-        (payload) => setSession(payload.new as PhotoboothSession)
+        (payload) => {
+          if (typeof console !== "undefined") {
+            // eslint-disable-next-line no-console
+            console.info("[LongDistance] realtime event received", {
+              event: "UPDATE",
+              status: (payload.new as PhotoboothSession)?.status,
+            });
+          }
+          setSession((prev) => mergeRow(prev, payload.new as PhotoboothSession));
+        }
       )
       .on(
         "postgres_changes",
@@ -367,7 +390,7 @@ export function useTogetherSession(
             s.creator_seen_at,
             s.partner_seen_at,
           ].join("|");
-        if (sig(server) !== sig(cur)) setSession(server);
+        if (sig(server) !== sig(cur)) setSession((prev) => mergeRow(prev, server));
       } catch {
         /* realtime remains the primary channel */
       }

@@ -94,6 +94,10 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
     setCount(null);
     setLocalPreviewUrl((prev) => {
       if (prev) {
+        if (typeof console !== "undefined") {
+          // eslint-disable-next-line no-console
+          console.info("[LongDistance] capturedPhoto CLEARED", { reason: "new session" });
+        }
         try {
           URL.revokeObjectURL(prev);
         } catch {
@@ -103,6 +107,25 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
       return null;
     });
   }, [session?.id]);
+
+  // Transition diagnostics: session status / camera state around capture.
+  useEffect(() => {
+    if (typeof console !== "undefined") {
+      // eslint-disable-next-line no-console
+      console.info("[LongDistance] session status changed", {
+        status: session?.status ?? null,
+        creator_ready: session?.creator_ready ?? null,
+        partner_ready: session?.partner_ready ?? null,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.id, session?.status]);
+  useEffect(() => {
+    if (typeof console !== "undefined") {
+      // eslint-disable-next-line no-console
+      console.info("[LongDistance] camera state changed", { camStatus });
+    }
+  }, [camStatus]);
 
   // Partner hit retake (or a fresh round started) → both clients return to
   // the ready view instead of lingering on a stale result.
@@ -124,6 +147,10 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
       setPageError("");
       setLocalPreviewUrl((prev) => {
         if (prev) {
+          if (typeof console !== "undefined") {
+            // eslint-disable-next-line no-console
+            console.info("[LongDistance] capturedPhoto CLEARED", { reason: "partner retake sync" });
+          }
           try {
             URL.revokeObjectURL(prev);
           } catch {
@@ -156,7 +183,7 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
   useEffect(() => {
     if (typeof console !== "undefined") {
       // eslint-disable-next-line no-console
-      console.info("[LongDistance] booth build together-v4-localpreview");
+      console.info("[LongDistance] booth build together-v5-noclear");
     }
   }, []);
 
@@ -231,9 +258,11 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
       });
       if (typeof console !== "undefined") {
         // eslint-disable-next-line no-console
+        console.info("[LongDistance] CAPTURE SUCCESS");
+        // eslint-disable-next-line no-console
         console.info("[LongDistance] Local preview URL:", { ready: true });
         // eslint-disable-next-line no-console
-        console.info("[LongDistance] capturedPhoto state updated");
+        console.info("[LongDistance] capturedPhoto SET");
       }
       const url = await new Promise<string>((res, rej) => {
         const r = new FileReader();
@@ -246,7 +275,15 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
         console.info("[LongDistance] Upload:", { dataUrlChars: url.length });
       }
       setCapState("uploading");
+      if (typeof console !== "undefined") {
+        // eslint-disable-next-line no-console
+        console.info("[LongDistance] upload started");
+      }
       const ok = await uploadPhotoRef.current(url);
+      if (typeof console !== "undefined") {
+        // eslint-disable-next-line no-console
+        console.info("[LongDistance] upload finished", { ok });
+      }
       setCapState(ok ? "done" : "failed");
     } catch {
       setCapState("failed");
@@ -328,7 +365,13 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
   useEffect(() => {
     return () => {
       if (resultUrl) URL.revokeObjectURL(resultUrl);
-      if (localPreviewUrl) URL.revokeObjectURL(localPreviewUrl);
+      if (localPreviewUrl) {
+        if (typeof console !== "undefined") {
+          // eslint-disable-next-line no-console
+          console.info("[LongDistance] capturedPhoto CLEARED", { reason: "unmount" });
+        }
+        URL.revokeObjectURL(localPreviewUrl);
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -340,6 +383,10 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
   }, [resultUrl]);
 
   const handleRetake = () => {
+    if (typeof console !== "undefined") {
+      // eslint-disable-next-line no-console
+      console.info("[LongDistance] capturedPhoto CLEARED", { reason: "retake" });
+    }
     if (resultUrl) URL.revokeObjectURL(resultUrl);
     if (localPreviewUrl) URL.revokeObjectURL(localPreviewUrl);
     setLocalPreviewUrl(null);
@@ -757,6 +804,27 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
               )}
             </div>
 
+            {/* Local capture preview — hoisted above the session-state
+                branches on purpose: once captured, my photo stays rendered
+                while uploading/waiting no matter what the session row,
+                realtime echoes, or polling merges do. Same on phone and
+                desktop; never display:none, no device branches. */}
+            {localPreviewUrl && (
+              <div className="mt-1 flex flex-col items-center">
+                <img
+                  src={localPreviewUrl}
+                  alt="Your captured photo"
+                  className="max-h-44 w-auto border border-[#E5DAC6] shadow-sm"
+                  onLoad={() => {
+                    if (typeof console !== "undefined") {
+                      // eslint-disable-next-line no-console
+                      console.info("[LongDistance] Rendering captured photo");
+                    }
+                  }}
+                />
+                <p className="text-[12.5px] font-bold text-[#6B7F5E] mt-1">your side, captured ♡</p>
+              </div>
+            )}
             {counting || iCaptured ? (
               <div className="text-center py-3">
                 <p className="font-hand text-[24px] text-[#8A7F72]">
@@ -778,25 +846,6 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
                     {otherCaptured ? "✓" : "○"} {otherName}
                   </span>
                 </div>
-                {/* Immediate local preview — my capture, shown before upload
-                    finishes and independent of partner sync. Plain flow
-                    element, no device branches, never display:none. */}
-                {localPreviewUrl && (
-                  <div className="mt-3 flex flex-col items-center">
-                    <img
-                      src={localPreviewUrl}
-                      alt="Your captured photo"
-                      className="max-h-44 w-auto border border-[#E5DAC6] shadow-sm"
-                      onLoad={() => {
-                        if (typeof console !== "undefined") {
-                          // eslint-disable-next-line no-console
-                          console.info("[LongDistance] Rendering captured photo");
-                        }
-                      }}
-                    />
-                    <p className="text-[12.5px] font-bold text-[#6B7F5E] mt-1">your side, captured ♡</p>
-                  </div>
-                )}
                 {iCaptured && otherCaptured && (
                   <p className="mt-2 inline-flex items-center gap-2 font-hand text-[21px] text-[#8A7F72]">
                     <Loader2 size={18} className="animate-spin" /> creating your photo…
