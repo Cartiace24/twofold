@@ -368,7 +368,7 @@ function applyGlow(ctx: CanvasRenderingContext2D, w: number, h: number, amount: 
 /* frames + strip chrome (rendered into the export)                    */
 /* ------------------------------------------------------------------ */
 
-function coverSrc(sw: number, sh: number, dw: number, dh: number) {
+function coverSrc(sw: number, sh: number, dw: number, dh: number, biasY = 0.5) {
   const target = dw / dh;
   const src = sw / sh;
   let sx = 0;
@@ -380,7 +380,9 @@ function coverSrc(sw: number, sh: number, dw: number, dh: number) {
     sx = (sw - w) / 2;
   } else {
     h = sw / target;
-    sy = (sh - h) / 2;
+    // biasY: 0.5 = center (default), 0 = keep the top. Selfies carry faces
+    // near the top, so the together strip anchors there instead of centering.
+    sy = (sh - h) * biasY;
   }
   return { sx, sy, w, h };
 }
@@ -519,7 +521,8 @@ export async function composeTogetherStripCanvas(
     [partner, partnerName],
   ];
   for (const [photo, name] of pairs) {
-    const { sx, sy, w, h } = coverSrc(photo.width, photo.height, photoW, photoH);
+    // Anchor toward the top so portrait selfies keep heads, not necks.
+    const { sx, sy, w, h } = coverSrc(photo.width, photo.height, photoW, photoH, 0.15);
     ctx.drawImage(photo, sx, sy, w, h, pad, y, photoW, photoH);
     ctx.strokeStyle = "rgba(43,38,34,0.25)";
     ctx.lineWidth = 2;
