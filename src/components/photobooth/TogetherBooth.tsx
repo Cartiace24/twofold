@@ -496,21 +496,12 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
     };
   }, [resultUrl]);
 
-  const handleRetake = () => {
-    if (resultUrl) URL.revokeObjectURL(resultUrl);
-    if (localPreviewUrl) URL.revokeObjectURL(localPreviewUrl);
-    setLocalPreviewUrl(null);
-    setResultUrl(null);
-    resultBlobRef.current = null;
-    capturedRef.current = null;
-    composingRef.current = false;
-    setCount(null);
-    setCapState("idle");
-    setWaitLong(false);
+  const handleRetake = async () => {
+    // Transactional: the confirmed retake_requested echo (mine or my
+    // partner's) drives the return-to-camera. On failure nothing local is
+    // cleared — the error stays visible with a retry.
     setPageError("");
-    // Coordinated via the session — the retake_requested echo drives the
-    // actual return-to-camera (same path as the partner's side).
-    void t.requestRetake();
+    await t.requestRetake();
   };
 
   // If my photo is up but my person's isn't arriving, say so and offer a

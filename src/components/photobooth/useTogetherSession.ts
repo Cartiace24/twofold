@@ -222,12 +222,13 @@ export function useTogetherSession(
   );
 
   /** Explicit synchronized retake: clears both photos + ready flags and
-   *  moves the shared session to retake_requested. Both clients process
-   *  that state (clear previews, return to camera, re-verify readiness)
-   *  and then promote back to ready — no local-only resets. */
-  const requestRetake = useCallback(async () => {
+   *  moves the shared session to retake_requested. Transactional from the
+   *  UI's perspective — nothing local transitions until the server write
+   *  is confirmed, so a failed write leaves the current state stable with
+   *  a retryable error instead of a half-reset session. */
+  const requestRetake = useCallback(async (): Promise<boolean> => {
     const s = sessionRef.current;
-    if (!sb || !s || !userId) return;
+    if (!sb || !s || !userId || !coupleId) return false;
     const at = nowISO();
     const patch = {
       status: "retake_requested" as const,
@@ -241,12 +242,62 @@ export function useTogetherSession(
     };
     if (typeof console !== "undefined") {
       // eslint-disable-next-line no-console
-      console.info("[LongDistance] RETAKE requested", { by: patch.retake_by });
+      console.info("[LongDistance] Retake requested");
+      // eslint-disable-next-line no-console
+      console.info("[LongDistance] Retake payload:", patch);
+      // eslint-disable-next-line no-console
+      console.info("[LongDistance] Retake session ID:", s.id);
+      // eslint-disable-next-line no-console
+      console.info("[LongDistance] Retake user ID:", userId);
+      // eslint-disable-next-line no-console
+      console.info("[LongDistance] Retake Supabase update started");
     }
-    setSession((prev) => (prev ? { ...prev, ...patch } : prev));
-    const { error } = await sb.from("photobooth_sessions").update(patch).eq("id", s.id);
-    if (error) setError("Couldn't send the retake — try again?");
-  }, [sb, userId, myName]);
+    const { data, error } = await sb
+      .from("photobooth_sessions")
+      .update(patch)
+      .eq("id", s.id)
+      .select();
+    if (typeof console !== "undefined") {
+      // eslint-disable-next-line no-console
+      console.info("[LongDistance] Retake Supabase response:", {
+        rows: data?.length ?? 0,
+        error: error
+          ? { message: error.message, code: error.code, details: error.details, hint: error.hint }
+          : null,
+      });
+    }
+    if (error) {
+      if (typeof console !== "undefined") {
+        // eslint-disable-next-line no-console
+        console.info("[LongDistance] Retake error:", {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint,
+        });
+      }
+      // Surface the real reason (e.g. check-constraint vs RLS) — the raw
+      // message names it, which is exactly what a retest needs to report.
+      setError(`Couldn't send the retake — ${error.message} Try again?`);
+      return false;
+    }
+    if (!data || data.length === 0) {
+      if (typeof console !== "undefined") {
+        // eslint-disable-next-line no-console
+        console.info("[LongDistance] Retake error:", { message: "zero rows updated" });
+      }
+      setError("Couldn't send the retake — session not found. Try again?");
+      return false;
+    }
+    if (typeof console !== "undefined") {
+      // eslint-disable-next-line no-console
+      console.info("[LongDistance] Retake update succeeded");
+    }
+    // Confirmed: adopt the server row; the retake_requested echo drives
+    // the return-to-camera on this side exactly like the partner's side.
+    setSession(data[0] as PhotoboothSession);
+    return true;
+  }, [sb, userId, coupleId, myName]);
 
   const endSession = useCallback(async () => {
     const s = sessionRef.current;
