@@ -19,6 +19,7 @@ import {
 } from "./render";
 import { useCamera, type Facing } from "./useCamera";
 import { partnerStale, useTogetherSession } from "./useTogetherSession";
+import { usePartnerVideo } from "./usePartnerVideo";
 
 function wait(ms: number): Promise<void> {
   return new Promise((res) => setTimeout(res, ms));
@@ -58,11 +59,39 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
     detail: camDetail,
     restart: camRestart,
     reattachCamera,
+    getStream: camGetStream,
   } = useCamera(facing, !!session);
   const reattachRef = useRef(reattachCamera);
   reattachRef.current = reattachCamera;
   const mirror = facing === "user";
   const cameraOk = camStatus === "ready";
+
+  // Live partner view (WebRTC video, broadcast signaling). Separate from
+  // capture/countdown/retake — if it fails, synchronized capture is
+  // unaffected. Only the known peer's messages are accepted.
+  const peerUserId =
+    role === "creator" ? (session?.partner_id ?? null) : (session?.created_by ?? null);
+  const pv = usePartnerVideo({
+    sb,
+    sessionId: session?.id ?? null,
+    userId: user?.id ?? null,
+    peerUserId,
+    isInitiator: role === "creator",
+    getLocalStream: camGetStream,
+    active: !!session,
+  });
+  const partnerVideoRef = useRef<HTMLVideoElement | null>(null);
+  useEffect(() => {
+    const el = partnerVideoRef.current;
+    if (el) el.srcObject = pv.partnerStream;
+  }, [pv.partnerStream]);
+  // Camera flip (or late camera start) swaps the local track in place —
+  // no renegotiation, connection stays up.
+  useEffect(() => {
+    if (cameraOk) pv.refreshLocal();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cameraOk, facing]);
+  const otherName = role === "creator" ? session?.partner_name || partnerLabel : session?.creator_name || "your person";
 
   const capturedRef = useRef<string | null>(null);
   const composingRef = useRef(false);
@@ -80,7 +109,6 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
 
   const ownReady = role === "creator" ? session?.creator_ready : session?.partner_ready;
   const otherReady = role === "creator" ? session?.partner_ready : session?.creator_ready;
-  const otherName = role === "creator" ? session?.partner_name || partnerLabel : session?.creator_name || "your person";
   const stale = !!session && !!role && partnerStale(session, role) && !resultUrl;
   const bothReady = !!session?.creator_ready && !!session?.partner_ready;
   // Fix C: joined + both-flags is semantically both-ready. Gating only on
@@ -88,6 +116,14 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
   // both cameras ready is the real precondition, not the label.
   const canStart =
     !!session && (session.status === "ready" || session.status === "joined") && bothReady && !resultUrl;
+  const pvStatusText =
+    pv.pvStatus === "connecting"
+      ? "Connecting to partner…"
+      : pv.pvStatus === "interrupted"
+        ? "Connection interrupted — reconnecting…"
+        : pv.pvStatus === "unavailable"
+          ? "Partner camera unavailable"
+          : "waiting for your person…";
 
   // Leave quietly when navigating away mid-session.
   useEffect(() => {
@@ -885,8 +921,46 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
         </div>
       </header>
 
-      {/* camera preview — local only, never streamed */}
-      <div className="min-h-[40dvh] relative bg-[#141110] overflow-hidden shrink-0">
+      {/* live cameras: partner view on top, your preview below (side-by-side on desktop) */}
+      <div className="sm:grid sm:grid-cols-2 sm:items-stretch shrink-0">
+      {peerUserId && (
+        <div className="relative bg-[#141110] overflow-hidden border-b border-[#2a2521] sm:border-b-0 sm:border-r sm:border-[#2a2521]">
+          <div className="relative w-full overflow-hidden bg-black aspect-[4/3]">
+            {pv.partnerStream ? (
+              <video
+                ref={partnerVideoRef}
+                autoPlay
+                playsInline
+                muted
+                disablePictureInPicture
+                controlsList="nodownload"
+                aria-label={`${otherName}'s live camera`}
+                className="absolute inset-0 w-full h-full object-cover block"
+              />
+            ) : (
+              <div className="absolute inset-0 grid place-items-center text-center px-6">
+                <div>
+                  <p className="font-hand text-[22px] text-[#E9DDC8]">{pvStatusText}</p>
+                  {(pv.pvStatus === "unavailable" || pv.pvStatus === "interrupted") && (
+                    <button onClick={pv.retry} className="touch mt-1 text-[13.5px] font-bold text-[#E9DDC8] underline">
+                      retry
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+            <span className="absolute top-2 left-2 inline-flex items-center gap-1.5 bg-black/55 text-[#FFFDF7] text-[11px] font-bold px-2 py-1 rounded-[3px] pointer-events-none">
+              {pv.pvStatus === "connected" && (
+                <span className="w-1.5 h-1.5 rounded-full bg-[#8fbf6b] animate-pulse" aria-hidden />
+              )}
+              {otherName} · live
+            </span>
+          </div>
+          <p className="px-3 py-1.5 text-[11px] text-[#8A7F72]">Live video isn't recorded or saved.</p>
+        </div>
+      )}
+      {/* camera preview — your side; capture still uses this local stream only */}
+      <div className="min-h-[40dvh] relative bg-[#141110] overflow-hidden">
         <div className="absolute inset-0 flex flex-col justify-center">
           <div className="relative w-full overflow-hidden bg-black aspect-[4/3]">
             <video
@@ -902,6 +976,9 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
                 visibility: cameraOk ? "visible" : "hidden",
               }}
             />
+            <span className="absolute top-2 left-2 bg-black/55 text-[#FFFDF7] text-[11px] font-bold px-2 py-1 rounded-[3px] pointer-events-none">
+              you
+            </span>
           </div>
         </div>
 
@@ -937,6 +1014,7 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
             )}
           </div>
         )}
+      </div>
       </div>
 
       {/* session state */}

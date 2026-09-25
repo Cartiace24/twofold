@@ -269,5 +269,9 @@ export function useCamera(facing: Facing, enabled = true) {
     return true;
   }, [start, stop]);
 
-  return { videoRef, status, detail, stop, restart: () => start(facing), reattachCamera };
+  /** Current live stream, if any — lets the partner-video layer reuse the
+   *  existing camera instead of calling getUserMedia a second time. */
+  const getStream = useCallback(() => streamRef.current, []);
+
+  return { videoRef, status, detail, stop, restart: () => start(facing), reattachCamera, getStream };
 }
