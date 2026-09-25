@@ -49,6 +49,7 @@ export function usePartnerVideo(args: {
   const [partnerStream, setPartnerStream] = useState<MediaStream | null>(null);
   const [pvStatus, setPvStatus] = useState<PVStatus>("idle");
   const [nonce, setNonce] = useState(0);
+  const [pcDiag, setPcDiag] = useState({ connection: "new", ice: "new", signaling: "stable" });
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const chRef = useRef<RealtimeChannel | null>(null);
@@ -232,9 +233,18 @@ export function usePartnerVideo(args: {
         pvlog("remote track received");
       }
     };
+    pc.onsignalingstatechange = () => {
+      if (cancelled || gen !== genRef.current || !pc) return;
+      setPcDiag((d) => ({ ...d, signaling: pc.signalingState }));
+    };
+    pc.oniceconnectionstatechange = () => {
+      if (cancelled || gen !== genRef.current || !pc) return;
+      setPcDiag((d) => ({ ...d, ice: pc.iceConnectionState }));
+    };
     pc.onconnectionstatechange = () => {
       if (cancelled || gen !== genRef.current || !pc) return;
       const st = pc.connectionState;
+      setPcDiag((d) => ({ ...d, connection: st }));
       pvlog("connection state changed", { state: st });
       if (st === "connected") {
         autoRestartsRef.current = 0;
@@ -295,5 +305,5 @@ export function usePartnerVideo(args: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sb, sessionId, userId, peerUserId, isInitiator, active, nonce]);
 
-  return { partnerStream, pvStatus, retry, refreshLocal };
+  return { partnerStream, pvStatus, retry, refreshLocal, pcDiag };
 }

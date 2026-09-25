@@ -85,6 +85,30 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
     const el = partnerVideoRef.current;
     if (el) el.srcObject = pv.partnerStream;
   }, [pv.partnerStream]);
+  // Desktop-vs-mobile diagnosis: one snapshot per state change.
+  useEffect(() => {
+    if (typeof console === "undefined") return;
+    if (!session) return;
+    const local = camGetStream();
+    const localTrack = local?.getVideoTracks()[0] ?? null;
+    const pel = partnerVideoRef.current;
+    // eslint-disable-next-line no-console
+    console.info("[LongDistance][WebRTC][DesktopDiag]", {
+      sessionId: session.id,
+      role,
+      localStreamExists: !!local,
+      localVideoTrackExists: !!localTrack,
+      localTrackLive: localTrack?.readyState,
+      partnerStreamExists: !!pv.partnerStream,
+      connectionState: pv.pcDiag.connection,
+      iceConnectionState: pv.pcDiag.ice,
+      signalingState: pv.pcDiag.signaling,
+      partnerStatus: pv.pvStatus,
+      partnerVideoElExists: !!pel,
+      partnerVideoSrcObjectExists: !!pel?.srcObject,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.id, role, cameraOk, pv.partnerStream, pv.pvStatus, pv.pcDiag]);
   // Camera flip (or late camera start) swaps the local track in place —
   // no renegotiation, connection stays up.
   useEffect(() => {
