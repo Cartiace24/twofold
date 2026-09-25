@@ -72,6 +72,12 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
   const otherReady = role === "creator" ? session?.partner_ready : session?.creator_ready;
   const otherName = role === "creator" ? session?.partner_name || partnerLabel : session?.creator_name || "your person";
   const stale = !!session && !!role && partnerStale(session, role) && !resultUrl;
+  const bothReady = !!session?.creator_ready && !!session?.partner_ready;
+  // Fix C: joined + both-flags is semantically both-ready. Gating only on
+  // 'ready' wedged desktop when the intermediate status landed late —
+  // both cameras ready is the real precondition, not the label.
+  const canStart =
+    !!session && (session.status === "ready" || session.status === "joined") && bothReady && !resultUrl;
 
   // Leave quietly when navigating away mid-session.
   useEffect(() => {
@@ -125,9 +131,28 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
   const doCapture = useCallback(async () => {
     const video = videoRef.current;
     const s = sessionRef.current;
+    // Capture uses the intrinsic camera dimensions (never clientWidth /
+    // clientHeight), preserving whatever aspect the camera delivers —
+    // portrait phone or landscape desktop webcam alike.
+    const stream = (video?.srcObject as MediaStream | null) ?? null;
     if (typeof console !== "undefined") {
       // eslint-disable-next-line no-console
-      console.info("[twofold] together capture", { hasVideo: !!video, hasSession: !!s });
+      console.info("[LongDistance] Video dimensions:", {
+        hasVideo: !!video,
+        hasSession: !!s,
+        readyState: video?.readyState ?? -1,
+        videoWidth: video?.videoWidth ?? 0,
+        videoHeight: video?.videoHeight ?? 0,
+        clientWidth: video?.clientWidth ?? 0,
+        clientHeight: video?.clientHeight ?? 0,
+        paused: video?.paused ?? true,
+        hasSrcObject: !!video?.srcObject,
+        tracks: stream?.getVideoTracks().map((tr) => ({
+          enabled: tr.enabled,
+          readyState: tr.readyState,
+          muted: tr.muted,
+        })) ?? null,
+      });
     }
     if (!video || !s) {
       setCapState("failed");
@@ -142,23 +167,34 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
       // Smaller than solo captures: two phones upload over mobile data and
       // both sides wait — 1600px is plenty for the strip.
       const src = grabFrame(video, mirror, 1600);
+      if (typeof console !== "undefined") {
+        // eslint-disable-next-line no-console
+        console.info("[LongDistance] Canvas capture:", {
+          canvasWidth: src?.width ?? 0,
+          canvasHeight: src?.height ?? 0,
+        });
+      }
       if (!src) throw new Error("camera not ready");
       const preset = BOOTH_PRESETS.find((p) => p.id === s.preset_id) ?? BOOTH_PRESETS[0];
       const graded = gradePhotoCanvas(src, resolveGrade(preset, 100, ADJUST_DEFAULTS));
       const blob = await canvasToJpeg(graded, 0.82);
+      if (typeof console !== "undefined") {
+        // eslint-disable-next-line no-console
+        console.info("[LongDistance] Blob:", { size: blob.size, type: blob.type });
+      }
       const url = await new Promise<string>((res, rej) => {
         const r = new FileReader();
         r.onload = () => res(String(r.result));
         r.onerror = rej;
         r.readAsDataURL(blob);
       });
+      if (typeof console !== "undefined") {
+        // eslint-disable-next-line no-console
+        console.info("[LongDistance] Upload:", { dataUrlChars: url.length });
+      }
       setCapState("uploading");
       const ok = await uploadPhotoRef.current(url);
       setCapState(ok ? "done" : "failed");
-      if (typeof console !== "undefined") {
-        // eslint-disable-next-line no-console
-        console.info("[twofold] together upload", { ok, bytes: blob.size });
-      }
     } catch {
       setCapState("failed");
       setPageError("Couldn't grab that frame — try retake?");
@@ -269,6 +305,21 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
 
   const handleTakePhoto = async () => {
     setPageError("");
+    const v = videoRef.current;
+    const stream = (v?.srcObject as MediaStream | null) ?? null;
+    if (typeof console !== "undefined") {
+      // eslint-disable-next-line no-console
+      console.info("[LongDistance] Take Photo clicked", {
+        status: session?.status,
+        creator_ready: session?.creator_ready,
+        partner_ready: session?.partner_ready,
+        role,
+        canStart,
+        cameraOk,
+        hasStream: !!stream,
+        streamLive: stream?.getVideoTracks().some((tr) => tr.readyState === "live") ?? false,
+      });
+    }
     const started = await t.startCountdown();
     if (!started) {
       // Either someone else started (realtime will show the countdown) or
@@ -534,8 +585,6 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
   const counting = session.status === "countdown";
   const iCaptured = (role === "creator" ? session.creator_photo : session.partner_photo) != null;
   const otherCaptured = (role === "creator" ? session.partner_photo : session.creator_photo) != null;
-  const bothReady = session.creator_ready && session.partner_ready;
-  const canStart = session.status === "ready" && bothReady && !resultUrl;
 
   return (
     <div className="min-h-dvh flex flex-col bg-[#FAF6EF] max-w-xl mx-auto">
@@ -697,11 +746,11 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
                     <Button onClick={handleTakePhoto} disabled={!canStart || !cameraOk} className="w-full mt-3">
                       Take Photo
                     </Button>
-                    {!canStart && !cameraOk && (
+                    {!cameraOk && (
                       <p className="text-[13px] text-[#8A7F72] mt-2">waiting for this camera to warm up…</p>
                     )}
-                    {!canStart && cameraOk && !t.error && (
-                      <p className="text-[13px] text-[#8A7F72] mt-2">syncing session… hold on ♡</p>
+                    {session.status === "joined" && cameraOk && (
+                      <p className="text-[13px] text-[#8A7F72] mt-2">syncing final state… you can still take the photo ♡</p>
                     )}
                   </>
                 ) : (

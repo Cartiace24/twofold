@@ -154,11 +154,13 @@ export function useTogetherSession(
     // Shared future capture moment — both devices count down to the same
     // timestamp on their own clocks (approx sync, no "capture now" race).
     const captureAt = new Date(Date.now() + COUNTDOWN_MS).toISOString();
+    // Accept joined as well as ready: joined + both-ready flags is
+    // semantically both-ready, so a late 'ready' label can't wedge capture.
     const { data, error } = await sb
       .from("photobooth_sessions")
       .update({ status: "countdown", capture_at: captureAt })
       .eq("id", s.id)
-      .eq("status", "ready")
+      .in("status", ["joined", "ready"])
       .select();
     if (error) {
       setError("Couldn't start the countdown — try again?");
@@ -183,6 +185,15 @@ export function useTogetherSession(
           : { partner_photo: dataUrl, partner_seen_at: nowISO() };
       setSession((prev) => (prev ? { ...prev, ...patch } : prev));
       const { error } = await sb.from("photobooth_sessions").update(patch).eq("id", s.id);
+      if (typeof console !== "undefined") {
+        // eslint-disable-next-line no-console
+        console.info("[LongDistance] Session update:", {
+          role,
+          ok: !error,
+          photoChars: dataUrl.length,
+          error: error?.message ?? null,
+        });
+      }
       if (error) {
         setError("Couldn't upload your photo — check connection and try retake?");
         return false;
