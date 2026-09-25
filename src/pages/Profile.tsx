@@ -224,7 +224,6 @@ export default function Profile() {
                       {!editingName ? (
                         <>
                           <p className="font-display font-semibold text-[15px] leading-tight truncate">{profile?.display_name || user?.displayName}</p>
-                          <p className="text-[11px] text-[#8A7F72] truncate">{user?.email}</p>
                           <div className="mt-1 flex items-center gap-2">
                             <p className="font-hand text-[16px] text-[#8A7F72] leading-none">your profile</p>
                             {!usingDemo && (
