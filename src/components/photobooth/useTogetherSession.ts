@@ -159,7 +159,8 @@ export function useTogetherSession(
         ? { creator_ready: true, creator_seen_at: nowISO() }
         : { partner_ready: true, partner_seen_at: nowISO() };
     setSession((prev) => (prev ? { ...prev, ...patch } : prev));
-    await sb.from("photobooth_sessions").update(patch).eq("id", s.id);
+    const { error } = await sb.from("photobooth_sessions").update(patch).eq("id", s.id);
+    if (error) setError(`Couldn't report camera readiness — check connection? (${error.message})`);
   }, [sb, role]);
 
   const startCountdown = useCallback(async () => {
@@ -388,7 +389,9 @@ export function useTogetherSession(
   // the row every few seconds and merge anything realtime didn't deliver.
   useEffect(() => {
     if (!sb || !session) return;
-    if (!["joined", "ready", "countdown"].includes(session.status)) return;
+    // retake_requested included: re-reported readiness after a retake must
+    // also converge when realtime drops it — same backstop, no new system.
+    if (!["joined", "ready", "countdown", "retake_requested"].includes(session.status)) return;
     const id = window.setInterval(async () => {
       try {
         const { data } = await sb

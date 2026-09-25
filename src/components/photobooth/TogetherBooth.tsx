@@ -235,6 +235,39 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
     return () => window.clearTimeout(id);
   }, [retakeNotice]);
 
+  // Take-Photo gate diagnostics: names the exact false condition.
+  useEffect(() => {
+    if (typeof console === "undefined") return;
+    if (resultUrl) return;
+    if (!session || !["joined", "ready", "retake_requested"].includes(session.status)) return;
+    const reason = !cameraOk
+      ? "local camera not ready"
+      : !ownReady
+        ? "local ready not reported"
+        : !otherReady
+          ? "waiting for partner camera"
+          : session.status !== "ready" && session.status !== "joined"
+            ? `session status ${session.status}`
+            : "none (enabled)";
+    // eslint-disable-next-line no-console
+    console.info("[LongDistance] localCameraReady:", { cameraOk });
+    // eslint-disable-next-line no-console
+    console.info("[LongDistance] partnerCameraReady:", { otherReady });
+    // eslint-disable-next-line no-console
+    console.info("[LongDistance] sessionStatus:", { status: session.status });
+    // eslint-disable-next-line no-console
+    console.info("[LongDistance] retakeState:", {
+      retake_at: session.retake_at,
+      retake_by: session.retake_by,
+      handled: handledRetakeRef.current,
+    });
+    // eslint-disable-next-line no-console
+    console.info("[LongDistance] canTakePhoto:", { canStart });
+    // eslint-disable-next-line no-console
+    console.info("[LongDistance] takePhotoDisabledReason:", { reason });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cameraOk, ownReady, otherReady, session?.status, session?.retake_at, resultUrl]);
+
   // Readiness diagnostics.
   useEffect(() => {
     if (otherReady && typeof console !== "undefined") {
