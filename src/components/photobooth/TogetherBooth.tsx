@@ -120,6 +120,7 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
   }, [session?.id, session?.status, role, ownReady, cameraOk, resultUrl]);
 
   const [capState, setCapState] = useState<"idle" | "capturing" | "uploading" | "done" | "failed">("idle");
+  const [waitLong, setWaitLong] = useState(false);
 
   const doCapture = useCallback(async () => {
     const video = videoRef.current;
@@ -249,9 +250,22 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
     composingRef.current = false;
     setCount(null);
     setCapState("idle");
+    setWaitLong(false);
     setPageError("");
     void t.retake();
   };
+
+  // If my photo is up but my person's isn't arriving, say so and offer a
+  // way out instead of spinning forever.
+  const myPhoto = role === "creator" ? session?.creator_photo : session?.partner_photo;
+  const otherPhoto = role === "creator" ? session?.partner_photo : session?.creator_photo;
+  const waitingForPartner = !!session && !!role && myPhoto != null && otherPhoto == null && !resultUrl;
+  useEffect(() => {
+    setWaitLong(false);
+    if (!waitingForPartner) return;
+    const id = window.setTimeout(() => setWaitLong(true), 45_000);
+    return () => window.clearTimeout(id);
+  }, [waitingForPartner, session?.id]);
 
   const handleTakePhoto = async () => {
     setPageError("");
@@ -657,10 +671,15 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
                     <Loader2 size={18} className="animate-spin" /> creating your photo…
                   </p>
                 )}
-                {pageError && (
+                {waitLong && !otherCaptured && (
+                  <p className="text-[13px] text-[#8A7F72] mt-2">
+                    still waiting for {otherName} — they may be stuck on their countdown. You can wait a little more or start the round over.
+                  </p>
+                )}
+                {(pageError || (waitLong && !otherCaptured)) && (
                   <div className="mt-2">
                     <button onClick={handleRetake} className="touch text-[14px] font-bold text-[#7D2E3B] underline">
-                      try again
+                      start this round over
                     </button>
                   </div>
                 )}

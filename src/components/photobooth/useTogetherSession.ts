@@ -327,6 +327,43 @@ export function useTogetherSession(
     };
   }, [sb, session]);
 
+  // ---- backstop polling while the session is live ----
+  // Realtime is primary, but row updates carrying a half-megabyte photo can
+  // go missing on flaky mobile data. While the session is active, re-read
+  // the row every few seconds and merge anything realtime didn't deliver.
+  useEffect(() => {
+    if (!sb || !session) return;
+    if (!["joined", "ready", "countdown"].includes(session.status)) return;
+    const id = window.setInterval(async () => {
+      try {
+        const { data } = await sb
+          .from("photobooth_sessions")
+          .select("*")
+          .eq("id", session.id)
+          .maybeSingle();
+        if (!data) return;
+        const server = data as PhotoboothSession;
+        const cur = sessionRef.current;
+        if (!cur || cur.id !== server.id) return;
+        const sig = (s: PhotoboothSession) =>
+          [
+            s.status,
+            s.creator_ready,
+            s.partner_ready,
+            s.capture_at,
+            s.creator_photo?.length ?? 0,
+            s.partner_photo?.length ?? 0,
+            s.creator_seen_at,
+            s.partner_seen_at,
+          ].join("|");
+        if (sig(server) !== sig(cur)) setSession(server);
+      } catch {
+        /* realtime remains the primary channel */
+      }
+    }, 4000);
+    return () => window.clearInterval(id);
+  }, [sb, session?.id, session?.status]);
+
   // ---- heartbeat so the other side can tell I'm still here ----
 
   useEffect(() => {
