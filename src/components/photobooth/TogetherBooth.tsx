@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Loader2, RefreshCw, SwitchCamera, Users } from "lucide-react";
 import { useApp } from "../../store/AppContext";
 import { getSupabase } from "../../lib/supabase";
-import { todayISO } from "../../lib/format";
+import { safeDisplayName, todayISO } from "../../lib/format";
 import { Button, Sheet } from "../ui/primitives";
 import { FilterTabs, Tape } from "../scrapbook/bits";
 import { MemoryForm } from "../forms/forms";
@@ -31,11 +31,13 @@ function wait(ms: number): Promise<void> {
  *  join → ready → shared capture_at countdown → each captures locally →
  *  both photos land in the row → each composes the same strip locally. */
 export default function TogetherBooth({ onBack }: { onBack: () => void }) {
-  const { user, couple, partnerProfile, addMemory, memories, updateMemory } = useApp();
+  const { user, couple, partnerProfile, profile, addMemory, memories, updateMemory } = useApp();
   const nav = useNavigate();
   const sb = getSupabase();
-  const myName = user?.displayName ?? "You";
-  const partnerLabel = partnerProfile?.display_name || "your person";
+  // Configured profile name first — never the auth email. Sanitized so a
+  // stale email-like value can never reach the UI or session writes.
+  const myName = safeDisplayName(profile?.display_name || user?.displayName, "You");
+  const partnerLabel = safeDisplayName(partnerProfile?.display_name, "your person");
 
   const t = useTogetherSession(sb, couple?.id ?? null, user?.id ?? null, myName);
   const { session, role } = t;
@@ -130,7 +132,12 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
     if (cameraOk) pv.refreshLocal();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cameraOk, facing]);
-  const otherName = role === "creator" ? session?.partner_name || partnerLabel : session?.creator_name || "your person";
+  // Session names first (fresh writes use configured names), profile
+  // fallback, never an email — stale email rows resolve to the fallback.
+  const otherName =
+    role === "creator"
+      ? safeDisplayName(session?.partner_name, partnerLabel)
+      : safeDisplayName(session?.creator_name, "your person");
 
   const capturedRef = useRef<string | null>(null);
   const composingRef = useRef(false);
@@ -353,8 +360,9 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
     void reattachRef.current().finally(() => {
       refreshLocalRef.current();
     });
-    const byOther = !!session.retake_by && session.retake_by !== myName;
-    setRetakeNotice(byOther ? `${session.retake_by} wants to retake ♡` : "Retaking together ♡");
+    const byName = safeDisplayName(session.retake_by, "");
+    const byOther = !!byName && byName !== myName;
+    setRetakeNotice(byOther ? `${byName} wants to retake ♡` : "Retaking together ♡");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.status, session?.retake_at]);
 
@@ -660,8 +668,8 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
         const strip = await composeTogetherStripCanvas(
           cc,
           pc,
-          session.creator_name || "you",
-          session.partner_name || partnerLabel
+          safeDisplayName(session.creator_name, myName),
+          safeDisplayName(session.partner_name, partnerLabel)
         );
         const blob = await canvasToJpeg(strip);
         resultBlobRef.current = blob;
@@ -914,8 +922,8 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
               <TogetherFrameEditor
                 photoAUrl={framePhotos.a}
                 photoBUrl={framePhotos.b}
-                nameA={session?.creator_name || myName}
-                nameB={session?.partner_name || partnerLabel}
+                nameA={safeDisplayName(session?.creator_name, myName)}
+                nameB={safeDisplayName(session?.partner_name, partnerLabel)}
                 onExport={openFrameSave}
                 onBack={() => setResultTab("strip")}
               />
@@ -1044,7 +1052,7 @@ export default function TogetherBooth({ onBack }: { onBack: () => void }) {
               {t.invites.map((inv) => (
                 <div key={inv.id} className="bg-[#FFFDF7] border border-[#E5DAC6] p-4 rotate-[0.3deg]">
                   <p className="font-display font-semibold text-[18px] leading-tight">
-                    {inv.creator_name || "your person"} wants to take a photo together
+                    {safeDisplayName(inv.creator_name, "your person")} wants to take a photo together
                   </p>
                   <p className="text-[13px] text-[#8A7F72] mt-0.5">open your camera and join in</p>
                   {t.error && <p className="text-[13.5px] font-semibold text-[#7D2E3B] mt-1">{t.error}</p>}

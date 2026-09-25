@@ -39,6 +39,15 @@ export function uid(prefix = ""): string {
     .slice(2, 8)}`;
 }
 
+/** Presentation-only display name: never shows an email address. Falls
+ *  back when the stored value is missing or email-like (stale rows may
+ *  contain raw emails from before this guard existed). */
+export function safeDisplayName(raw: string | null | undefined, fallback: string): string {
+  const v = (raw ?? "").trim();
+  if (!v || v.includes("@")) return fallback;
+  return v.slice(0, 40);
+}
+
 export function makeInviteCode(): string {
   const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
   let s = "";
