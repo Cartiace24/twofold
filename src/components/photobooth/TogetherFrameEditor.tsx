@@ -38,6 +38,7 @@ function PanZoomCell({
 }) {
   const boxRef = useRef<HTMLDivElement | null>(null);
   const [cw, setCw] = useState(0);
+  const [imgBroken, setImgBroken] = useState(false);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const pinchBase = useRef<{ d: number; s: number } | null>(null);
   const valRef = useRef(value);
@@ -90,7 +91,7 @@ function PanZoomCell({
       ref={boxRef}
       role="application"
       aria-label={`${label} — drag to reposition, pinch or scroll to zoom`}
-      className="relative w-full overflow-hidden bg-[#141110] border border-[#E5DAC6] select-none [touch-action:none]"
+      className="relative w-full overflow-hidden bg-[#EDE6D6] border border-[#E5DAC6] select-none [touch-action:none]"
       style={{ height: ch || 160 }}
       onPointerDown={(e) => {
         (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
@@ -126,11 +127,12 @@ function PanZoomCell({
         if (pointers.current.size < 2) pinchBase.current = null;
       }}
     >
-      {win && (
+      {win && !imgBroken && (
         <img
           src={src}
           alt={label}
           draggable={false}
+          onError={() => setImgBroken(true)}
           className="absolute max-w-none pointer-events-none"
           style={{
             width: sw * k,
@@ -139,6 +141,13 @@ function PanZoomCell({
             top: -win.sy * k,
           }}
         />
+      )}
+      {(!win || imgBroken) && (
+        <div className="absolute inset-0 grid place-items-center px-4 text-center">
+          <p className="font-hand text-[19px] text-[#8A7F72]">
+            {imgBroken ? "this photo didn't load — try retaking?" : "loading photo…"}
+          </p>
+        </div>
       )}
     </div>
   );

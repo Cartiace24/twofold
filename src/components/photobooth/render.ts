@@ -592,6 +592,10 @@ function drawWindow(
   dh: number
 ) {
   const win = frameWindow(photo.width, photo.height, dw, dh, t);
+  // Paper underlay first: the cover window always fills the rect, but this
+  // guarantees no unpainted (JPEG-black) seam can survive rounding.
+  ctx.fillStyle = PAPER;
+  ctx.fillRect(dx, dy, dw, dh);
   ctx.drawImage(photo, win.sx, win.sy, win.w, win.h, dx, dy, dw, dh);
   ctx.strokeStyle = "rgba(43,38,34,0.25)";
   ctx.lineWidth = 2;
